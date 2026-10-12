@@ -1,0 +1,36 @@
+# Vendor SDK and board documents are kept locally.
+/evm3588_linux_v1.0.3/
+
+# Regenerable delivery copies and archives.
+/音视频代码包/
+/*.zip
+
+# Local backup/reference, browser profile and extraction checks.
+/backups/
+/_board_reference/
+/_shots/
+/test_unzip/
+
+# Generated board state may contain IPs, PIDs and device IDs.
+/board_status.js
+
+# Build artifacts and camera recordings.
+*.o
+*.a
+*.so
+*.so.*
+*.nv12
+*.yuv
+*.h264
+*.h265
+*.mp4
+*.mkv
+*.ts
+*.log
+/board/v4l2_mpp_enc/yuv_mpp_enc
+/board/v4l2_mpp_enc/v4l2_mpp_enc
+
+# Tool/editor state.
+__pycache__/
+.DS_Store
+Thumbs.db
