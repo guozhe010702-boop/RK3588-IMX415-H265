@@ -336,10 +336,17 @@ Expand-Archive -LiteralPath '.\EVM3588-B_音视频代码包.zip' -DestinationPat
 Set-Location -LiteralPath $extractDir
 Get-ChildItem
 Get-ChildItem -LiteralPath '.\board'</pre></div>
-      <p>进入含有 <code>deploy.ps1</code> 的目录执行后续电脑端命令。压缩包实际包含如下内容；HTML 方案和 SDK 文档位于当前工作目录，未包含在这个 ZIP 中。</p>
+      <p>进入含有 <code>deploy.ps1</code> 的目录执行后续电脑端命令。更新后的 ZIP 包含代码、方案网页、路线二手册和状态采样工具；厂商 SDK、本地备份及真实运行状态未打包。</p>
       <div class="codewrap"><pre class="quick-tree">代码包根目录/
 ├── deploy.ps1                     Windows 部署入口
 ├── README.txt                     简要使用说明
+├── README.md                      项目入口与验证记录
+├── EVM3588-B_音视频实时压缩方案.html  本地方案页面
+├── docs/                          路线二 Markdown + HTML 手册
+├── tools/                         手册生成、语法检查和打包工具
+├── refresh_status.ps1             ADB 只读状态采样
+├── board_status.example.js         空状态模板
+├── board_status.js                 空状态；运行采样脚本后更新
 └── board/                         推送到板子的代码
     ├── 00_env_check.sh            环境检查
     ├── 01_mpp_selftest.sh         MPP 无摄像头自测
@@ -890,6 +897,7 @@ bash 03_cam_encode.sh 44 h265 3840x2160 12 20</pre></div>
         <h4>MPP C API 自研编码（吃透压缩链路）</h4>
         <div class="when">已在板端验证 · 产物：/userdata/av_dev/mpp_route2/ 下两个 H.265 C 程序</div>
         <div class="pc">
+          <div class="note info"><b>完整操作与修改指南：</b><a href="docs/路线二_MPP_C_API_操作与修改指南.html">路线二 MPP C API 手册（浏览器阅读）</a>，也可查看 <a href="docs/路线二_MPP_C_API_操作与修改指南.md">Markdown 原文</a>。逐条解释电脑/板端命令，讲解两个程序、双平面内存和 MPP 配置，并给出码率/GOP 实验与后续动态码率、网络输出的开发顺序。本次更新前的方案已另存于本地 <code>backups/before_route2_guide_20261012_172937/</code>，含校验清单。</div>
           <p class="muted" style="margin-bottom:9px">先不碰摄像头，用测试图验证 MPP；随后在暂停 HDMI/TCP 主链路的短暂窗口中录制摄像头，再恢复 07 脚本。</p>
           <div class="codewrap" style="margin:0 0 10px"><pre>cd /userdata/av_dev/mpp_route2
 make

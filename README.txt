@@ -1,6 +1,9 @@
 EVM3588-B IMX415 / H.265 实时预览与推流
 =====================================
 
+完整路线二讲解见 docs/路线二_MPP_C_API_操作与修改指南.md；GitHub 入口说明见 README.md。
+本次修改前的方案、代码和 ZIP 在 backups/before_route2_guide_20261012_172937/。
+
 当前已验证硬件：IMX415 接 con7，板端 NV12 采集节点 /dev/video44；
 EVM3588-B 的 HDMI 屏幕与电脑 ffplay 可同时观看，板子 IP 曾为 192.168.2.221。
 
