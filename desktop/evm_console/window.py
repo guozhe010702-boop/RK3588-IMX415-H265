@@ -7,7 +7,8 @@ from PySide6.QtGui import QDesktopServices,QPixmap
 from PySide6.QtWidgets import (QMainWindow,QWidget,QVBoxLayout,QHBoxLayout,QGridLayout,QFormLayout,QLabel,
     QPushButton,QLineEdit,QComboBox,QSpinBox,QDoubleSpinBox,QCheckBox,QFileDialog,QMessageBox,QFrame,
     QStackedWidget,QPlainTextEdit,QTableWidget,QTableWidgetItem,QHeaderView,QProgressBar,QDialog,QScrollArea)
-from .core import Connection,DEFAULT_CONFIG,load_preferences,save_preferences,controls,explain_error,data_root
+from .core import (Connection,DEFAULT_CONFIG,load_preferences,save_preferences,controls,explain_error,data_root,
+    PREVIEW_PRESETS,load_preview_quality,save_preview_quality)
 from .ssh import SSHWorker,trust_host
 from .video import VideoWorker
 from .files import FileWorker
@@ -22,11 +23,13 @@ class MainWindow(QMainWindow):
         self.setStyleSheet(STYLE); self.connection,self.download_dir,auto=load_preferences()
         self.board={}; self.ssh_connected=False; self.operation_busy=False; self.file_busy=False; self.password=''
         self.error_until=0
+        self.closing=False; self.want_board=False; self.pending_logs=[]; self.displayed_frames=0; self.rate_sample=(time.monotonic(),0,0)
+        self.log_timer=QTimer(self); self.log_timer.setInterval(200); self.log_timer.timeout.connect(self.flush_logs); self.log_timer.start()
         self.pending_stop_recording=False
         self.rows=[]; self.local_files={}; self.last_history=None; self.fullscreen=None; self.file_viewers=[]; self.event_log=[]; self.video_state='未播放'
         self.ssh=SSHWorker(); self.video=VideoWorker(); self.files=FileWorker()
         self.build_ui(auto); self.connect_signals(); self.ssh.start(); self.video.start(); self.files.start()
-        self.timer=QTimer(self); self.timer.setInterval(33); self.timer.timeout.connect(self.render_frame); self.timer.start()
+        self.timer=QTimer(self); self.timer.setTimerType(Qt.TimerType.PreciseTimer); self.timer.setInterval(33); self.timer.timeout.connect(self.render_frame); self.timer.start()
         self.clock=QTimer(self); self.clock.setInterval(1000); self.clock.timeout.connect(self.update_clock); self.clock.start()
         self.update_controls(); self.add_log('系统','控制台已就绪。先连接开发板，已有直播将自动显示。')
 
@@ -42,6 +45,10 @@ class MainWindow(QMainWindow):
         left=QVBoxLayout(); body.addLayout(left,1)
         caption=QHBoxLayout(); label=QLabel('实时画面'); label.setObjectName('section'); caption.addWidget(label)
         self.stream_text=QLabel('等待连接'); self.stream_text.setObjectName('muted'); caption.addWidget(self.stream_text); caption.addStretch()
+        self.preview_quality=QComboBox(); self.preview_quality.addItems(list(PREVIEW_PRESETS)); self.preview_quality.setCurrentText(load_preview_quality())
+        self.preview_quality.setToolTip('仅改变电脑预览尺寸与帧率；板端编码、HDMI 和录像参数不变')
+        self.preview_quality.currentTextChanged.connect(self.change_preview_quality); caption.addWidget(self.preview_quality)
+        self.video.set_quality(*PREVIEW_PRESETS[self.preview_quality.currentText()])
         caption.addWidget(button('重新播放',self.reconnect_video)); caption.addWidget(button('全屏',self.enter_fullscreen)); left.addLayout(caption)
         self.video_holder=QVBoxLayout(); self.video_holder.setContentsMargins(0,0,0,0)
         video_frame=QFrame(); video_frame.setObjectName('panel'); video_frame.setLayout(self.video_holder)
@@ -51,6 +58,7 @@ class MainWindow(QMainWindow):
         for key,title in [('fps','编码帧率'),('size','采集尺寸'),('bitrate','目标码率'),('disk','板端剩余空间')]:
             self.metrics[key]=Metric(title); metrics.addWidget(self.metrics[key])
         left.addLayout(metrics)
+        self.preview_stats=QLabel('电脑预览：等待画面'); self.preview_stats.setObjectName('muted'); left.addWidget(self.preview_stats)
         toolbar=QHBoxLayout(); self.action_buttons={}
         for action,text,name in [('start','▶ 启动直播','primary'),('stop','■ 停止直播',''),('snapshot','截图',''),('record-start','● 开始录像','primary'),('record-stop','■ 停止录像','danger')]:
             item=button(text,lambda checked=False,a=action:self.action(a),name); self.action_buttons[action]=item; toolbar.addWidget(item)
@@ -123,7 +131,7 @@ class MainWindow(QMainWindow):
     def build_logs(self):
         layout=self.page('运行日志'); self.log_filter=QComboBox(); self.log_filter.addItems(['全部','系统','连接','控制','编码','录像','播放','文件'])
         self.log_filter.currentTextChanged.connect(self.render_logs); layout.addWidget(self.log_filter)
-        self.log_view=QPlainTextEdit(); self.log_view.setReadOnly(True); self.log_view.setMinimumHeight(300); layout.addWidget(self.log_view,1)
+        self.log_view=QPlainTextEdit(); self.log_view.setReadOnly(True); self.log_view.setMaximumBlockCount(1000); self.log_view.setMinimumHeight(300); layout.addWidget(self.log_view,1)
         layout.addWidget(button('读取板端最近日志',lambda:self.ssh.submit('logs'))); layout.addWidget(button('复制当前日志',self.copy_logs)); layout.addWidget(button('打开本地日志目录',lambda:QDesktopServices.openUrl(QUrl.fromLocalFile(str(data_root())))))
 
     def connect_signals(self):
@@ -152,11 +160,14 @@ class MainWindow(QMainWindow):
                 try: keyring.delete_password('EVM3588CameraConsole',self.connection.credential_id)
                 except keyring.errors.PasswordDeleteError: pass
             self.save_settings(); self.files.configure(self.connection,self.password)
-            self.have_config=False; self.ssh.submit('connect',(self.connection,self.password)); self.message.setText('正在连接 SSH 并查询板端状态…')
+            self.want_board=True; self.have_config=False; self.ssh.submit('connect',(self.connection,self.password)); self.message.setText('正在连接 SSH 并查询板端状态…')
         except Exception as error: self.on_failure('connect',str(error))
 
     def disconnect_board(self):
-        self.ssh.submit('disconnect'); self.video.pause(); self.files.cancel.set(); self.password=''; self.files.password=''
+        self.want_board=False
+        self.ssh.submit('disconnect'); self.video.pause(); self.files.disconnect(); self.password=''
+        self.board={}; self.ssh_connected=False; self.update_controls()
+        self.badges['SSH'].set_state(False,'未连接')
         self.canvas.set_message('控制与电脑预览已断开；板端任务继续运行',clear=True)
 
     def on_host_key(self,details):
@@ -167,6 +178,7 @@ class MainWindow(QMainWindow):
         else: self.message.setText('尚未信任主机，连接已取消。')
 
     def on_connection(self,connected,message):
+        if self.closing or (connected and not self.want_board): return
         self.ssh_connected=connected; self.badges['SSH'].set_state(connected,'已连接' if connected else '未连接')
         self.connection_note.setText(message); self.add_log('连接',message); self.update_controls()
         if connected: self.files.configure(self.connection,self.password); self.files.submit('list')
@@ -207,6 +219,7 @@ class MainWindow(QMainWindow):
         self.fps.setValue(config.get('fps',30)); self.bitrate.setValue(config.get('bitrate',2500000)/1000000); self.gop.setValue(config.get('gop',30)); self.device.setText(config.get('device','/dev/video44'))
 
     def on_status(self,status):
+        if self.closing or not self.want_board: return
         previous=self.board; self.board=status; ready=status.get('state')=='running'; config=status.get('config',{})
         self.badges['VPU'].set_state(bool(status.get('vpuDeviceOpen')),'硬编' if status.get('vpuDeviceOpen') else '未运行')
         self.badges['HDMI'].set_state(bool(status.get('previewRunning')),'已开启' if status.get('previewRunning') else '已关闭')
@@ -230,6 +243,7 @@ class MainWindow(QMainWindow):
         self.update_controls(); self.update_clock()
 
     def on_result(self,action,response):
+        if getattr(self,'closing',False) or not getattr(self,'want_board',True): return
         if not response.get('ok'):
             recovery=response.get('result',{}).get('recovery',{})
             note='（原直播已恢复）' if recovery.get('restored') else ''
@@ -265,7 +279,11 @@ class MainWindow(QMainWindow):
 
     def render_frame(self):
         frame=self.video.take_frame()
-        if frame: self.canvas.set_frame(frame[0],frame[1],frame[2])
+        if frame: self.canvas.set_frame(frame[0],frame[1],frame[2]); self.displayed_frames+=1
+
+    def change_preview_quality(self,quality):
+        save_preview_quality(quality); self.video.set_quality(*PREVIEW_PRESETS[quality]); self.reconnect_video()
+        self.add_log('播放',f'电脑预览切换为{quality}；板端直播和录像保持原参数。')
 
     def reconnect_video(self):
         self.video.pause()
@@ -281,6 +299,13 @@ class MainWindow(QMainWindow):
         if self.fullscreen: self.video_holder.addWidget(self.canvas); self.fullscreen.deleteLater(); self.fullscreen=None
 
     def update_clock(self):
+        now=time.monotonic(); before,decoded,displayed=self.rate_sample; elapsed=max(0.001,now-before)
+        if elapsed>=0.8: self.rate_sample=(now,self.video.frames,self.displayed_frames)
+        if elapsed>=0.8 and self.video_state=='实时画面' and now-self.video.last_frame<4:
+            startup=self.video.first_frame_seconds
+            suffix=f' · 首帧 {startup:.2f}s' if startup is not None else ''
+            self.preview_stats.setText(f'电脑预览 {self.video.width}×{self.video.height} · 解码 {(self.video.frames-decoded)/elapsed:.1f} fps · 显示 {(self.displayed_frames-displayed)/elapsed:.1f} fps · 重连 {self.video.reconnects}{suffix}')
+        elif self.video_state!='实时画面': self.preview_stats.setText('电脑预览：'+self.video_state)
         started=self.board.get('recordingStartedAt')
         if started:
             try:
@@ -305,7 +330,7 @@ class MainWindow(QMainWindow):
         self.progress.setValue(int(done/max(1,total)*100)); self.download_note.setText(f'正在下载：{done/1024**2:.1f} / {total/1024**2:.1f} MB')
 
     def on_download(self,remote,local):
-        self.last_local=local; self.local_files[remote]=local; self.progress.setValue(100); self.download_note.setText('已保存：'+local); self.add_log('文件','下载完成：'+local)
+        self.last_local=local; self.local_files[remote]=local; self.progress.setValue(100); self.download_note.setText('SHA-256 校验通过，已保存：'+local); self.add_log('文件','下载与 SHA-256 校验完成：'+local)
         if local.lower().endswith('.jpg'): self.thumbnail.setPixmap(QPixmap(local).scaled(300,130,Qt.AspectRatioMode.KeepAspectRatio,Qt.TransformationMode.SmoothTransformation))
 
     def choose_download(self):
@@ -322,11 +347,22 @@ class MainWindow(QMainWindow):
 
     def add_log(self,category,text):
         line=f'[{datetime.now():%H:%M:%S}] [{category}] {text}'; self.event_log.append((category,line)); self.event_log=self.event_log[-1000:]
-        path=data_root()/'console.log'
-        if path.exists() and path.stat().st_size>2*1024*1024: path.replace(data_root()/'console.previous.log')
-        with path.open('a',encoding='utf-8') as file: file.write(line+'\n')
-        if hasattr(self,'log_view'): self.render_logs()
+        self.pending_logs.append((category,line)); self.pending_logs=self.pending_logs[-1000:]
+    def flush_logs(self):
+        if not self.pending_logs: return
+        pending,self.pending_logs=self.pending_logs,[]
+        try:
+            path=data_root()/'console.log'
+            if path.exists() and path.stat().st_size>2*1024*1024: path.replace(data_root()/'console.previous.log')
+            with path.open('a',encoding='utf-8') as file: file.write('\n'.join(line for _,line in pending)+'\n')
+        except OSError as error:
+            self.message.setToolTip('本地日志写入失败：'+str(error))
+        category=self.log_filter.currentText(); lines=[line for group,line in pending if category=='全部' or category==group]
+        if lines:
+            bar=self.log_view.verticalScrollBar(); follow=bar.value()>=bar.maximum()-2; position=bar.value()
+            self.log_view.appendPlainText('\n'.join(lines)); bar.setValue(bar.maximum() if follow else position)
     def render_logs(self):
+        self.flush_logs()
         category=self.log_filter.currentText(); lines=[line for group,line in self.event_log if category=='全部' or category==group]
         self.log_view.setPlainText('\n'.join(lines)); bar=self.log_view.verticalScrollBar(); bar.setValue(bar.maximum())
     def copy_logs(self):
@@ -334,13 +370,19 @@ class MainWindow(QMainWindow):
         QApplication.clipboard().setText(self.log_view.toPlainText())
 
     def closeEvent(self,event):
-        self.timer.stop(); self.clock.stop(); self.save_settings()
-        for viewer in list(self.file_viewers): viewer.close()
-        self.ssh.shutdown(); self.video.shutdown(); self.files.shutdown()
-        for worker in (self.ssh,self.video,self.files):
-            if not worker.wait(12000):
-                event.ignore(); self.message.setText('正在等待后台连接安全退出，请稍后再次关闭。'); return
+        if not self.closing:
+            self.closing=True; self.timer.stop(); self.clock.stop(); self.log_timer.stop(); self.save_settings(); self.flush_logs()
+            self.centralWidget().setEnabled(False); self.message.setText('正在退出电脑连接与预览；板端任务继续运行…')
+            for viewer in list(self.file_viewers): viewer.close()
+            self.ssh.shutdown(); self.video.shutdown(); self.files.shutdown()
+            self.close_timer=QTimer(self); self.close_timer.setInterval(100); self.close_timer.timeout.connect(self.finish_close); self.close_timer.start()
+        if any(worker.isRunning() for worker in (self.ssh,self.video,self.files)) or self.file_viewers:
+            event.ignore(); return
+        self.close_timer.stop(); self.flush_logs()
         self.secret.clear(); self.password=''; event.accept()
+
+    def finish_close(self):
+        if not any(worker.isRunning() for worker in (self.ssh,self.video,self.files)) and not self.file_viewers: self.close()
 
 class LocalVideoDialog(QDialog):
     def __init__(self,path,parent):
@@ -349,14 +391,19 @@ class LocalVideoDialog(QDialog):
         layout.addWidget(QLabel('本地 MP4 循环回放 · 关闭窗口结束播放'))
         self.worker=VideoWorker(); self.worker.state.connect(self.canvas.set_message)
         self.worker.configure(path,1280,720,('file',1280,720,path)); self.worker.start()
-        self.timer=QTimer(self); self.timer.setInterval(33); self.timer.timeout.connect(self.render); self.timer.start()
+        self.timer=QTimer(self); self.timer.setTimerType(Qt.TimerType.PreciseTimer); self.timer.setInterval(33); self.timer.timeout.connect(self.render); self.timer.start()
     def render(self):
         frame=self.worker.take_frame()
         if frame: self.canvas.set_frame(frame[0],frame[1],frame[2])
     def closeEvent(self,event):
         self.timer.stop(); self.worker.shutdown()
-        if self.worker.wait(6000):
+        if not self.worker.isRunning():
             parent=self.parent()
             if parent is not None and hasattr(parent,'file_viewers') and self in parent.file_viewers: parent.file_viewers.remove(self)
             event.accept(); self.deleteLater()
-        else: event.ignore()
+        else:
+            event.ignore()
+            if not hasattr(self,'close_timer'):
+                self.close_timer=QTimer(self); self.close_timer.setInterval(100); self.close_timer.timeout.connect(self.close_if_ready); self.close_timer.start()
+    def close_if_ready(self):
+        if not self.worker.isRunning(): self.close_timer.stop(); self.close()

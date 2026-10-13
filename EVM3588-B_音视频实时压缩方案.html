@@ -247,7 +247,7 @@ footer .mono{color:#b9c7d5;font-size:12px}
     <p class="lead">当前主链路已跑通：con7 的 IMX415 经 <code>/dev/video44</code> 双平面 NV12M 采集，由独立 FFmpeg 调用 RK3588 VPU 进行 H.265 硬编；MediaMTX RTSP 同时供 HDMI 与电脑播放，支持手动 MP4 录像、JPEG 截图和实际运行统计。</p>
     <div class="hero-actions">
       <a class="action primary" href="docs/Windows_相机控制台操作指南.html">使用 Windows 桌面控制台 →</a>
-      <a class="action" href="EVM3588CameraConsole-Windows-x64-v1.0.0.zip" download>下载本地免安装 EXE</a>
+      <a class="action" href="EVM3588CameraConsole-Windows-x64-v1.1.0.zip" download>下载本地 1.1.0 EXE</a>
       <a class="action" href="#start">查看解压与部署</a>
       <a class="action" href="EVM3588-B_音视频代码包.zip" download>下载本地代码包</a>
       <a class="action" href="README.txt">查看 README</a>
@@ -307,7 +307,7 @@ python3 /userdata/av_dev/ffmpeg_pipeline/avctl.py preview-start</pre></div>
     </div>
     <div class="codewrap"><div class="codebar"><span class="fn">电脑 PowerShell · RTSP 实时播放</span><button class="copy" type="button">复制</button></div><pre>ffplay -rtsp_transport tcp -fflags nobuffer -flags low_delay -framedrop rtsp://192.168.2.221:8554/imx415</pre></div>
     <p class="muted"><code>ffplay</code> 播放视频；<code>-rtsp_transport tcp</code> 用 TCP 传输，<code>-fflags nobuffer</code> 减少输入缓存，<code>-flags low_delay</code> 请求低延迟解码，<code>-framedrop</code> 在显示落后时丢弃显示帧。地址是板端 IP、8554 端口和 <code>/imx415</code> 路径。加入时可能需要等待下一个关键帧。若板子 IP 变化，板端 <code>hostname -I</code> 可查询新地址。</p>
-    <div class="note ok"><b>桌面软件已实现：</b><a href="docs/Windows_相机控制台操作指南.html">Windows 中文控制台使用说明</a> · <a href="docs/Windows_相机控制台验收记录.html">桌面实际验收</a> · <a href="docs/FFmpeg_全链路操作指南.html">底层 FFmpeg 操作指南</a>。通过 SSH 控制、RTSP 实时预览、H.264/H.265 参数、HDMI、截图、MP4 与 SFTP 下载；无需每次手输命令。EXE 压缩包在本地交付，下载按钮需要同目录已有该文件。</div>
+    <div class="note ok"><b>桌面软件 1.1.0 已更新：</b><a href="docs/Windows_控制台优化调研与实施.html">优化调研与改进</a> · <a href="docs/Windows_相机控制台操作指南.html">Windows 中文控制台使用说明</a> · <a href="docs/Windows_相机控制台验收记录.html">桌面实际验收</a> · <a href="docs/FFmpeg_全链路操作指南.html">底层 FFmpeg 操作指南</a>。通过 SSH 控制、RTSP 实时预览、H.264/H.265 参数、HDMI、截图、MP4 与 SFTP 下载；无需每次手输命令。EXE 压缩包在本地交付，下载按钮需要同目录已有该文件。</div>
   </div>
 </section>
 

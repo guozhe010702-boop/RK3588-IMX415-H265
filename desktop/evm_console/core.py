@@ -46,8 +46,26 @@ def load_preferences():
 
 def save_preferences(connection,download_dir,auto_download):
     value={'connection':asdict(connection),'download_dir':str(download_dir),'auto_download':bool(auto_download)}
+    # Retain display preferences when updating connection/media settings.
+    value['preview_quality']=load_preview_quality()
     temp=data_root()/'preferences.tmp'; temp.write_text(json.dumps(value,ensure_ascii=False,indent=2),encoding='utf-8')
     temp.replace(data_root()/'preferences.json')
+
+PREVIEW_PRESETS={'流畅':(640,15),'均衡':(960,30),'清晰':(1280,30)}
+
+def load_preview_quality():
+    try:
+        value=json.loads((data_root()/'preferences.json').read_text(encoding='utf-8')).get('preview_quality','清晰')
+        return value if value in PREVIEW_PRESETS else '清晰'
+    except (OSError,ValueError,TypeError): return '清晰'
+
+def save_preview_quality(quality):
+    if quality not in PREVIEW_PRESETS: raise ValueError('Unknown preview quality')
+    path=data_root()/'preferences.json'
+    try: value=json.loads(path.read_text(encoding='utf-8'))
+    except (OSError,ValueError): value={}
+    value['preview_quality']=quality
+    temp=data_root()/'preferences.tmp'; temp.write_text(json.dumps(value,ensure_ascii=False,indent=2),encoding='utf-8'); temp.replace(path)
 
 def executable(name):
     roots=[Path(sys.executable).parent,Path(getattr(sys,'_MEIPASS',Path(__file__).resolve().parents[1]))]

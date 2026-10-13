@@ -1,0 +1,91 @@
+{
+  "version": "1.1.0",
+  "testedAt": "2026-10-13T14:04:56+0800",
+  "unitTests": 19,
+  "portable": {
+    "windows": "Windows 11 x64",
+    "chinesePath": true,
+    "scaleFactors": [
+      1.25,
+      1.5
+    ],
+    "pythonRequired": false
+  },
+  "profiles": [
+    {
+      "quality": "流畅",
+      "width": 640,
+      "height": 360,
+      "decodedFps": 15.0,
+      "displayedFps": 14.95,
+      "decoderCpuOneCorePercent": 11.56,
+      "guiCpuOneCorePercent": 5.31,
+      "rssBytes": 158269440,
+      "firstFrameSeconds": 1.094
+    },
+    {
+      "quality": "均衡",
+      "width": 960,
+      "height": 540,
+      "decodedFps": 30.0,
+      "displayedFps": 28.15,
+      "decoderCpuOneCorePercent": 12.97,
+      "guiCpuOneCorePercent": 13.28,
+      "rssBytes": 159600640,
+      "firstFrameSeconds": 1.25
+    },
+    {
+      "quality": "清晰",
+      "width": 1280,
+      "height": 720,
+      "decodedFps": 30.05,
+      "displayedFps": 28.1,
+      "decoderCpuOneCorePercent": 21.17,
+      "guiCpuOneCorePercent": 21.56,
+      "rssBytes": 161996800,
+      "firstFrameSeconds": 1.437
+    }
+  ],
+  "decoderRecoverySeconds": 2.078,
+  "controlReconnectSeconds": [
+    1.922,
+    1.828,
+    1.969,
+    1.859,
+    1.875,
+    1.766,
+    1.922,
+    1.828,
+    1.969,
+    1.859
+  ],
+  "rapidPreviewSwitches": 10,
+  "hashVerified": [
+    "JPEG",
+    "MP4"
+  ],
+  "steadyRunSeconds": 120.0,
+  "rssMinBytes": 152367104,
+  "rssMaxBytes": 174342144,
+  "closeHandlerSeconds": 0.0,
+  "fullyClosedSeconds": 0.109,
+  "boardCaptureUnaffected": true,
+  "lowFpsSource": {
+    "ok": true,
+    "sourceFps": 15,
+    "previewCap": 30,
+    "measuredOutputFps": 14.75
+  },
+  "artifact": {
+    "name": "EVM3588CameraConsole-Windows-x64-v1.1.0.zip",
+    "bytes": 142245086,
+    "sha256": "c774993bda2b01c75ba44a6cd1fb6c043fa65e26f1714b21d52004ddd1d53d7e",
+    "exeSha256": "5a1c74f57c0a0aadabce64c25b816e326cb8e5c78a3978376733e262681754db"
+  },
+  "ffmpegSha256": "589e50b766d251afdf181dd664d40bd94407e200b019989fd7468c7d118a28d0",
+  "limitations": [
+    "Windows 10 not independently tested",
+    "No new 30-minute run in this revision",
+    "No glass-to-glass latency measurement"
+  ]
+}

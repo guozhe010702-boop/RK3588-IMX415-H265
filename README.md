@@ -4,9 +4,9 @@ IMX415 接 EVM3588-B con7，经 `/dev/video44` 双平面 NV12M 采集，由独�
 
 默认 1920×1080、30 fps、H.265 CBR 2.5 Mbit/s、GOP 30、无音频。保留系统 FFmpeg、厂商 MPP/RGA/ISP 服务、GStreamer 方案和路线二 C 程序。验收后保持新链路运行，未启用开机自动启动。
 
-**Windows 桌面控制台已实现。** 解压本地 `EVM3588CameraConsole-Windows-x64-v1.0.0.zip`，双击 EXE，通过中文界面连接 SSH、实时看画面、选择 H.264/H.265、控制 HDMI、截图、录像、下载与回放。无需安装 Python，首次登录使用自己的 SSH 密码或密钥。
+**Windows 桌面控制台已实现。** 解压本地 `EVM3588CameraConsole-Windows-x64-v1.1.0.zip`，双击 EXE，通过中文界面连接 SSH、实时看画面、选择 H.264/H.265、控制 HDMI、截图、录像、下载与回放。无需安装 Python，首次登录使用自己的 SSH 密码或密钥。
 
-先阅读 [桌面操作指南](docs/Windows_相机控制台操作指南.md)；测试数据见 [桌面验收记录](docs/Windows_相机控制台验收记录.md)。源码位于 [desktop](desktop/README.md)，便携 EXE 在本地交付，不上传 Git。
+先阅读 [桌面操作指南](docs/Windows_相机控制台操作指南.md)；测试数据见 [桌面验收记录](docs/Windows_相机控制台验收记录.md)。新增预览档位、会话隔离、下载内容校验与异步退出，见 [1.1.0 优化调研](docs/Windows_控制台优化调研与实施.md)。源码位于 [desktop](desktop/README.md)，便携 EXE 在本地交付，不上传 Git。
 
 | 内容 | 入口 |
 | --- | --- |

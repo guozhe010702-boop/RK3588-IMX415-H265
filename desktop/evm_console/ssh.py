@@ -67,58 +67,71 @@ class SSHWorker(QThread):
     def __init__(self):
         super().__init__(); self.jobs=queue.Queue(); self.stop_event=threading.Event(); self.client=None
         self.connection=None; self.password=''; self.want_connection=False
-    def submit(self,action,payload=None): self.jobs.put((action,payload))
+        self.generation=0; self.lock=threading.Lock()
+    def submit(self,action,payload=None):
+        with self.lock:
+            if action in ('connect','disconnect'): self.generation+=1
+            self.jobs.put((self.generation,action,payload))
+    def publish(self,signal,generation,*args):
+        with self.lock:
+            if generation==self.generation and not self.stop_event.is_set(): signal.emit(*args)
     def shutdown(self):
         self.stop_event.set()
         if self.client: self.client.close()
     def run(self):
         next_poll=0; retry=0; delay=1
         while not self.stop_event.is_set():
-            try: action,payload=self.jobs.get(timeout=0.05)
-            except queue.Empty: action=None; payload=None
+            try: generation,action,payload=self.jobs.get(timeout=0.05)
+            except queue.Empty:
+                action=None; payload=None
+                with self.lock: generation=self.generation
+            with self.lock:
+                if generation!=self.generation: continue
             if action=='connect':
                 if self.client: self.client.close()
                 self.client=None; self.connection,self.password=payload; self.want_connection=True; retry=0; delay=1
             elif action=='disconnect':
                 self.want_connection=False; self.password=''
                 if self.client: self.client.close()
-                self.client=None; self.connected.emit(False,'已断开控制连接'); continue
+                self.client=None; self.publish(self.connected,generation,False,'已断开控制连接'); continue
             if self.want_connection and self.client is None and time.monotonic()>=retry:
-                self.busy.emit(True)
+                self.publish(self.busy,generation,True)
                 try:
                     self.client=connect_ssh(self.connection,self.password)
-                    self.connected.emit(True,'SSH 已连接'); delay=1
-                    check=invoke(self.client,'check'); self.result.emit('check',check)
-                    self.status.emit(invoke(self.client,'status')['result']); next_poll=time.monotonic()+1
+                    self.publish(self.connected,generation,True,'SSH 已连接'); delay=1
+                    check=invoke(self.client,'check'); self.publish(self.result,generation,'check',check)
+                    self.publish(self.status,generation,invoke(self.client,'status')['result']); next_poll=time.monotonic()+1
                 except UnknownHost as error:
-                    self.want_connection=False; self.host_key.emit(error.details())
-                except (paramiko.AuthenticationException,paramiko.BadHostKeyException) as error:
-                    self.want_connection=False; self.failure.emit('connect',str(error)); self.connected.emit(False,'SSH 认证或主机指纹校验失败')
+                    self.want_connection=False; self.publish(self.host_key,generation,error.details())
+                except (paramiko.AuthenticationException,paramiko.BadHostKeyException,paramiko.PasswordRequiredException) as error:
+                    self.want_connection=False; self.publish(self.failure,generation,'connect',str(error)); self.publish(self.connected,generation,False,'SSH 认证或主机指纹校验失败')
                     if self.client: self.client.close()
                     self.client=None
                 except Exception as error:
                     if self.client: self.client.close()
-                    self.client=None; self.connected.emit(False,'连接中断，正在重连'); self.failure.emit('connect',str(error))
+                    self.client=None; self.publish(self.connected,generation,False,'连接中断，正在重连'); self.publish(self.failure,generation,'connect',str(error))
                     retry=time.monotonic()+delay; delay=min(8,delay*2)
-                finally: self.busy.emit(False)
+                finally: self.publish(self.busy,generation,False)
                 if self.client is None: continue
             if action in ACTIONS:
+                with self.lock:
+                    if generation!=self.generation: continue
                 if self.client is None:
-                    self.failure.emit(action,'SSH 尚未连接'); continue
-                self.busy.emit(True)
+                    self.publish(self.failure,generation,action,'SSH 尚未连接'); continue
+                self.publish(self.busy,generation,True)
                 try:
-                    response=invoke(self.client,action,payload); self.result.emit(action,response)
+                    response=invoke(self.client,action,payload); self.publish(self.result,generation,action,response)
                     # A timed-out or failed mutation is never re-issued.
-                    self.status.emit(invoke(self.client,'status')['result']); next_poll=time.monotonic()+1
+                    self.publish(self.status,generation,invoke(self.client,'status')['result']); next_poll=time.monotonic()+1
                 except Exception as error:
-                    self.failure.emit(action,str(error)); self.client.close(); self.client=None
-                    self.connected.emit(False,'控制连接中断，正在查询恢复后的状态'); retry=time.monotonic()+1
-                finally: self.busy.emit(False)
+                    self.publish(self.failure,generation,action,str(error)); self.client.close(); self.client=None
+                    self.publish(self.connected,generation,False,'控制连接中断，正在查询恢复后的状态'); retry=time.monotonic()+1
+                finally: self.publish(self.busy,generation,False)
             elif self.client and time.monotonic()>=next_poll:
-                try: self.status.emit(invoke(self.client,'status')['result'])
+                try: self.publish(self.status,generation,invoke(self.client,'status')['result'])
                 except Exception as error:
-                    self.failure.emit('status',str(error)); self.client.close(); self.client=None
-                    self.connected.emit(False,'状态连接中断，正在重连'); retry=time.monotonic()+1
+                    self.publish(self.failure,generation,'status',str(error)); self.client.close(); self.client=None
+                    self.publish(self.connected,generation,False,'状态连接中断，正在重连'); retry=time.monotonic()+1
                 next_poll=time.monotonic()+1
         if self.client: self.client.close()
         self.password=''
