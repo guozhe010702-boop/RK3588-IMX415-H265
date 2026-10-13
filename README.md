@@ -4,6 +4,10 @@ IMX415 接 EVM3588-B con7，经 `/dev/video44` 双平面 NV12M 采集，由独�
 
 默认 1920×1080、30 fps、H.265 CBR 2.5 Mbit/s、GOP 30、无音频。保留系统 FFmpeg、厂商 MPP/RGA/ISP 服务、GStreamer 方案和路线二 C 程序。验收后保持新链路运行，未启用开机自动启动。
 
+**Windows 桌面控制台已实现。** 解压本地 `EVM3588CameraConsole-Windows-x64-v1.0.0.zip`，双击 EXE，通过中文界面连接 SSH、实时看画面、选择 H.264/H.265、控制 HDMI、截图、录像、下载与回放。无需安装 Python，首次登录使用自己的 SSH 密码或密钥。
+
+先阅读 [桌面操作指南](docs/Windows_相机控制台操作指南.md)；测试数据见 [桌面验收记录](docs/Windows_相机控制台验收记录.md)。源码位于 [desktop](desktop/README.md)，便携 EXE 在本地交付，不上传 Git。
+
 | 内容 | 入口 |
 | --- | --- |
 | 部署、构建、播放、录像、截图、故障处理 | [FFmpeg 全链路操作指南](docs/FFmpeg_全链路操作指南.md) |
@@ -45,7 +49,7 @@ ffplay -rtsp_transport tcp -fflags nobuffer -flags low_delay rtsp://192.168.2.22
 
 本轮使用 H.265 进行真实硬编、两端显示、MP4 回放、截图、十次启停、服务重启与连续运行验收。时间、帧数、资源数据见验收记录。连接到首帧的时间不等于镜头到屏幕的端到端延迟，后者尚未测量。
 
-Windows 桌面软件目前交付设计，板端控制接口已实现。H.264 已提供参数入口，完整验收仍以 H.265 为准。曝光/增益与 RKAIQ 协调、ROI、算法识别、音频、外网和多路相机待后续开发。
+Windows 桌面软件已实现并接入板端控制接口，H.264/H.265 切换已实际出画面，持续验收使用 H.265。曝光/增益与 RKAIQ 协调、ROI、算法识别、音频、外网和多路相机待后续开发。
 
 网页状态由电脑 [refresh_status.ps1](refresh_status.ps1) 手动生成并注明采样时间；浏览器本身不连接 SSH、不直接播放 RTSP。运行快照、录像、截图、凭据、备份与构建产物保留本地，不上传 Git。`音视频代码包/` 与 ZIP 是本地交付副本，Git 以根目录 `board/` 为准；厂商 SDK 不入仓库。
 

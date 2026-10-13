@@ -246,7 +246,8 @@ footer .mono{color:#b9c7d5;font-size:12px}
     <h1>摄像头源数据采集 → 硬件处理 → <em>实时视频流压缩</em><br>端到端落地方案</h1>
     <p class="lead">当前主链路已跑通：con7 的 IMX415 经 <code>/dev/video44</code> 双平面 NV12M 采集，由独立 FFmpeg 调用 RK3588 VPU 进行 H.265 硬编；MediaMTX RTSP 同时供 HDMI 与电脑播放，支持手动 MP4 录像、JPEG 截图和实际运行统计。</p>
     <div class="hero-actions">
-      <a class="action primary" href="#runtime">查看运行状态与启动命令 →</a>
+      <a class="action primary" href="docs/Windows_相机控制台操作指南.html">使用 Windows 桌面控制台 →</a>
+      <a class="action" href="EVM3588CameraConsole-Windows-x64-v1.0.0.zip" download>下载本地免安装 EXE</a>
       <a class="action" href="#start">查看解压与部署</a>
       <a class="action" href="EVM3588-B_音视频代码包.zip" download>下载本地代码包</a>
       <a class="action" href="README.txt">查看 README</a>
@@ -306,7 +307,7 @@ python3 /userdata/av_dev/ffmpeg_pipeline/avctl.py preview-start</pre></div>
     </div>
     <div class="codewrap"><div class="codebar"><span class="fn">电脑 PowerShell · RTSP 实时播放</span><button class="copy" type="button">复制</button></div><pre>ffplay -rtsp_transport tcp -fflags nobuffer -flags low_delay -framedrop rtsp://192.168.2.221:8554/imx415</pre></div>
     <p class="muted"><code>ffplay</code> 播放视频；<code>-rtsp_transport tcp</code> 用 TCP 传输，<code>-fflags nobuffer</code> 减少输入缓存，<code>-flags low_delay</code> 请求低延迟解码，<code>-framedrop</code> 在显示落后时丢弃显示帧。地址是板端 IP、8554 端口和 <code>/imx415</code> 路径。加入时可能需要等待下一个关键帧。若板子 IP 变化，板端 <code>hostname -I</code> 可查询新地址。</p>
-    <div class="note ok"><b>完整使用入口：</b><a href="docs/FFmpeg_全链路操作指南.html">FFmpeg 构建、启动、录像、截图与故障处理</a> · <a href="docs/FFmpeg_全链路验收记录.html">实际验收数据</a> · <a href="docs/Windows_上位机设计与开源调研.html">Windows 上位机设计与开源调研</a>。手动录像通过 <code>record-start / record-stop</code> 控制，读取已编码 RTSP 并复制封装 MP4；不会增加第二次编码。桌面软件本轮交付设计，下一阶段开发。</div>
+    <div class="note ok"><b>桌面软件已实现：</b><a href="docs/Windows_相机控制台操作指南.html">Windows 中文控制台使用说明</a> · <a href="docs/Windows_相机控制台验收记录.html">桌面实际验收</a> · <a href="docs/FFmpeg_全链路操作指南.html">底层 FFmpeg 操作指南</a>。通过 SSH 控制、RTSP 实时预览、H.264/H.265 参数、HDMI、截图、MP4 与 SFTP 下载；无需每次手输命令。EXE 压缩包在本地交付，下载按钮需要同目录已有该文件。</div>
   </div>
 </section>
 
@@ -1222,7 +1223,7 @@ ioctl(fd, VIDIOC_QBUF, &b);</pre></div>
         <p class="muted">开 performance 调速；确认走的是硬编（top 中 CPU 应很低）；缩到 1080p 用 RGA；4K60 官方不保证，按 30fps 设计；必要时上 dma-buf 零拷贝。</p>
       </div>
     </div>
-    <div class="note info" style="margin-top:20px"><b>当前进度：</b>FFmpeg 直接采集 → VPU H.265 → RTSP → 两端播放、MP4 和截图已跑通；持续测试数据见验收记录。Windows 上位机已完成设计，下一阶段开发。网页展示带时间的状态快照；镜头到屏幕的端到端延迟仍待专门测量。</div>
+    <div class="note info" style="margin-top:20px"><b>当前进度：</b>FFmpeg 直接采集 → VPU H.265 → RTSP → 两端播放、MP4 和截图已跑通；Windows 桌面控制台已实现并打包。界面可看实时视频、控制相机链路并下载录像，网页仍展示带时间的状态快照。镜头到屏幕的端到端延迟待专门测量。</div>
   </div>
 </section>
 

@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Windows 相机控制台 1.0.0 验收记录</title>
+<style>
+:root{color-scheme:light;--ink:#183246;--sub:#50677a;--line:#d9e4eb;--blue:#086d95}
+*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;font:16px/1.85 system-ui,"Microsoft YaHei",sans-serif;color:var(--ink);background:#f2f6f9}
+header{background:#15364a;color:white;padding:28px max(24px,calc((100vw - 1320px)/2));}header a{color:#a7e5ff}header p{margin:8px 0 0;font-size:14px}
+.layout{display:grid;grid-template-columns:250px minmax(0,1fr);gap:28px;max-width:1320px;margin:28px auto;padding:0 24px}
+nav{align-self:start;position:sticky;top:20px;background:white;border:1px solid var(--line);border-radius:12px;padding:20px}nav strong{display:block;margin-bottom:10px}nav a{display:block;font-size:14px;margin:10px 0;line-height:1.6}
+main{min-width:0;background:white;border:1px solid var(--line);border-radius:12px;padding:32px 40px}h1{font-size:28px;line-height:1.4;margin-top:0}h2{font-size:23px;border-top:1px solid var(--line);padding-top:28px;margin-top:40px;scroll-margin-top:18px}h3{font-size:19px;scroll-margin-top:18px}p{margin:12px 0}a{color:var(--blue)}code{font:14px/1.6 Consolas,monospace;background:#eef4f7;border-radius:4px;padding:2px 5px;overflow-wrap:anywhere}pre{padding:18px 20px;border-radius:9px;background:#15364a;color:#e8f6ff;overflow-x:auto;line-height:1.65;white-space:pre}pre code{background:transparent;padding:0;color:inherit;overflow-wrap:normal}table{display:block;overflow-x:auto;width:100%;border-collapse:collapse;margin:18px 0;font-size:14px}th,td{border:1px solid var(--line);padding:10px 12px;vertical-align:top;min-width:110px}th{background:#edf5f8}li{margin:6px 0}strong{color:#0d5270}
+@media(max-width:900px){.layout{display:block;margin:16px auto;padding:0 14px}nav{position:static;margin-bottom:16px}main{padding:22px 18px}h1{font-size:24px}}@media print{header,nav{display:none}.layout{display:block;max-width:none;padding:0;margin:0}main{border:0;padding:0}pre{white-space:pre-wrap;background:#eee;color:black}h2{break-after:avoid}table{display:table}a{color:inherit}}
+</style></head><body><header><a href="../EVM3588-B_音视频实时压缩方案.html">← 返回方案网页</a><p>EVM3588-B · IMX415/con7 · FFmpeg / MPP · 操作与设计文档</p></header>
+<div class="layout"><nav><strong>操作与学习目录</strong><a href="#section-2">1. 实际功能测试</a><a href="#section-3">2. 发现并修正的问题</a><a href="#section-4">3. 持续运行</a><a href="#section-5">4. 自动测试与交付</a></nav><main><h1 id="section-1">Windows 相机控制台 1.0.0 验收记录</h1>
+<p>日期：2026-10-13。实际测试电脑为 Windows 11 专业版 x64 / build 26200；开发板 EVM3588-B、IMX415/con7、<code>/dev/video44</code>。目标支持 Windows 10/11 x64，Windows 10 本轮没有独立机器实测。</p>
+<h2 id="section-2">1. 实际功能测试</h2>
+<table>
+<thead>
+<tr>
+<th>项目</th>
+<th>实际结果</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>SSH 控制</td>
+<td>使用 Paramiko 真实登录，软件读取板端状态与硬编器</td>
+</tr>
+<tr>
+<td>视频预览</td>
+<td>软件内 BGR24 解码显示，板端 HDMI 同时播放</td>
+</tr>
+<tr>
+<td>截图</td>
+<td>板端 JPEG 自动 SFTP 下载，界面缩略图显示</td>
+</tr>
+<tr>
+<td>MP4 录像</td>
+<td>GUI 开始/停止，下载得到 1920×1080 HEVC，时长 11.466667 秒；封口与 ffprobe 检查通过</td>
+</tr>
+<tr>
+<td>本地回放</td>
+<td>下载 MP4 在软件内循环回放，5 秒测试解出 163 帧，窗口关闭后退出解码进程</td>
+</tr>
+<tr>
+<td>编码切换</td>
+<td>GUI H.265 → H.264 → H.265，均确认实际 rkmpp 编码器与软件画面；最终恢复默认 H.265</td>
+</tr>
+<tr>
+<td>编码帧率</td>
+<td>传感器报告 30 fps；GUI 设置编码 15 fps，软件实测解码 15.1 fps，然后恢复 30 fps</td>
+</tr>
+<tr>
+<td>参数失败恢复</td>
+<td>请求不存在的 <code>/dev/video999</code>，明确失败并恢复原 <code>/dev/video44</code> 直播</td>
+</tr>
+<tr>
+<td>录像中改参</td>
+<td>应用按钮禁用，板端继续保留保护</td>
+</tr>
+<tr>
+<td>十次启停</td>
+<td>修正后的控制器连续十次启动/停止成功</td>
+</tr>
+<tr>
+<td>十次断开/重连</td>
+<td>1.859～1.969 秒恢复软件画面，全部小于 5 秒</td>
+</tr>
+<tr>
+<td>SSH 自动恢复</td>
+<td>关闭测试 SSH 传输后 1.859 秒自动重连，板端采集 PID 不变</td>
+</tr>
+<tr>
+<td>解码进程恢复</td>
+<td>结束此软件的解码进程后 2.297 秒恢复视频，板端采集不受影响</td>
+</tr>
+<tr>
+<td>真实取消下载</td>
+<td>读取 SFTP 文件后取消，清理本地 partial，板端录像大小和采集 PID 不变</td>
+</tr>
+<tr>
+<td>Windows 凭据存储</td>
+<td>临时测试条目写入、读取、删除通过；未在文件写入密码</td>
+</tr>
+<tr>
+<td>中文路径与缩放</td>
+<td>便携 EXE 从中文目录启动，125% / 150% 缩放下 SSH 与画面正常，关闭退出码 0</td>
+</tr>
+<tr>
+<td>无 Python PATH</td>
+<td>验证便携 EXE 时 PATH 仅保留 Windows 目录，使用包内 Python/Qt/FFmpeg 运行</td>
+</tr>
+</tbody>
+</table>
+<p>H.264 完成实际切换与出画面验证；本轮 30 分钟稳定测试使用 H.265。连接到可解码画面的等待时间不是镜头到屏幕的端到端延迟，后者未专门测量。</p>
+<h2 id="section-3">2. 发现并修正的问题</h2>
+<p>Windows RTSP 解码参数修正为本机构建支持的 <code>-timeout</code>。界面完成深色滚动区域、禁用按钮与缩放检查。</p>
+<p>重复启停期间曾出现采集打开后没有首帧，重新启动还观察到驱动时间戳跳变导致补帧。控制器增加 STREAMOFF 后 0.5 秒等待、首帧失败的一次受限重试，并按帧序号生成固定帧率输出时间戳，禁止 FFmpeg 额外复制帧。修正后重新执行十次启停及持续测试。</p>
+<p>应用参数失败会恢复旧配置与直播，返回恢复结果；实际尺寸不符会明确失败。下载时检查路径与文件类型，使用受限 SFTP 预取，避免大文件无界预取；下载进度使用可容纳大文件大小的字段。</p>
+<p>自动下载仅针对本次结束的录像，停止未录像的直播不会反复下载上一段 MP4。停止直播中的录像封口失败会显示错误。</p>
+<h2 id="section-4">3. 持续运行</h2>
+<p>最终监测从约 11:12 至 11:42，实际计时 1800.093 秒，358 次采样，通过且错误列表为空。</p>
+<table>
+<thead>
+<tr>
+<th>指标</th>
+<th>实际结果</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>解码帧数</td>
+<td>54006 帧，平均约 30.00 fps</td>
+</tr>
+<tr>
+<td>帧停滞</td>
+<td>没有超过测试阈值的帧停滞</td>
+</tr>
+<tr>
+<td>SSH / 直播 / HDMI</td>
+<td>所有样本均保持正常</td>
+</tr>
+<tr>
+<td>编码进程与播放器</td>
+<td>采集 PID 不变，电脑解码进程没有重启</td>
+</tr>
+<tr>
+<td>软件 RSS 工作集</td>
+<td>112517120～163516416 字节，约 107.3～155.9 MiB；受 Windows 工作集回收影响有下降，没有持续增长趋势</td>
+</tr>
+</tbody>
+</table>
+<p>关闭测试窗口后软件自己的后台线程和解码进程结束，开发板继续运行。后续帧率实测与最终状态再次确认：H.265、1920×1080、30 fps、2.5 Mbit/s、GOP 30、VPU 与 HDMI 正常。</p>
+<p>此前一段监测收到明确的停止直播操作，因此中断。最终持续验收使用禁用操作的测试窗口，重新计满 30 分钟，不把中断段算入通过结果。</p>
+<h2 id="section-5">4. 自动测试与交付</h2>
+<p>桌面 11 项自动测试通过：JSON 结果校验、完整帧碎片与最新帧、状态按钮保护、配置不含密码、下载路径/链接拒绝、取消下载清理、JSON 标准输入、远端失败不重复发送、旧录像不重复下载、正常录像下载、封口失败显示。</p>
+<p>板端 10 项单元测试通过，包括原配置/占用/低空间保护、参数失败恢复、恢复失败明确报告，以及低编码帧率抽帧、超出实际传感器帧率时提前拒绝。真实硬件验收另按上表执行。</p>
+<p>便携包附带 FFmpeg、Qt/Python 依赖、许可证与构建版本。源码、说明和固定依赖上传 Git；录像、截图、密码、临时密钥、真实状态与二进制保留本地。临时 SSH 验收公钥结束后移除。</p>
+<p>曝光、增益、ROI、识别算法、音频、多路相机与外网访问尚未加入桌面软件；后续应先实现板端能力，再接入 UI。</p>
+</main></div></body></html>

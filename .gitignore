@@ -4,6 +4,7 @@
 # Regenerable delivery copies and archives.
 /音视频代码包/
 /*.zip
+/*.zip.sha256
 
 # Local backup/reference, browser profile and extraction checks.
 /backups/
@@ -11,6 +12,12 @@
 /_shots/
 /test_unzip/
 /_work_ffmpeg/
+/_work_desktop/
+/.venv-desktop/
+/desktop/build/
+/desktop/dist/
+/desktop/vendor/
+/.pytest_cache/
 *.bundle
 /board/ffmpeg_pipeline/runtime/
 /board/ffmpeg_pipeline/build/

@@ -5,6 +5,7 @@
 **/Makefile text eol=lf
 *.md text eol=lf
 *.html text eol=lf
+*.svg text eol=lf
 *.js text eol=lf
 *.py text eol=lf
 *.json text eol=lf

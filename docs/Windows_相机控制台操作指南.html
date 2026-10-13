@@ -1,0 +1,209 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Windows 相机控制台：安装、操作与源码修改</title>
+<style>
+:root{color-scheme:light;--ink:#183246;--sub:#50677a;--line:#d9e4eb;--blue:#086d95}
+*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;font:16px/1.85 system-ui,"Microsoft YaHei",sans-serif;color:var(--ink);background:#f2f6f9}
+header{background:#15364a;color:white;padding:28px max(24px,calc((100vw - 1320px)/2));}header a{color:#a7e5ff}header p{margin:8px 0 0;font-size:14px}
+.layout{display:grid;grid-template-columns:250px minmax(0,1fr);gap:28px;max-width:1320px;margin:28px auto;padding:0 24px}
+nav{align-self:start;position:sticky;top:20px;background:white;border:1px solid var(--line);border-radius:12px;padding:20px}nav strong{display:block;margin-bottom:10px}nav a{display:block;font-size:14px;margin:10px 0;line-height:1.6}
+main{min-width:0;background:white;border:1px solid var(--line);border-radius:12px;padding:32px 40px}h1{font-size:28px;line-height:1.4;margin-top:0}h2{font-size:23px;border-top:1px solid var(--line);padding-top:28px;margin-top:40px;scroll-margin-top:18px}h3{font-size:19px;scroll-margin-top:18px}p{margin:12px 0}a{color:var(--blue)}code{font:14px/1.6 Consolas,monospace;background:#eef4f7;border-radius:4px;padding:2px 5px;overflow-wrap:anywhere}pre{padding:18px 20px;border-radius:9px;background:#15364a;color:#e8f6ff;overflow-x:auto;line-height:1.65;white-space:pre}pre code{background:transparent;padding:0;color:inherit;overflow-wrap:normal}table{display:block;overflow-x:auto;width:100%;border-collapse:collapse;margin:18px 0;font-size:14px}th,td{border:1px solid var(--line);padding:10px 12px;vertical-align:top;min-width:110px}th{background:#edf5f8}li{margin:6px 0}strong{color:#0d5270}
+@media(max-width:900px){.layout{display:block;margin:16px auto;padding:0 14px}nav{position:static;margin-bottom:16px}main{padding:22px 18px}h1{font-size:24px}}@media print{header,nav{display:none}.layout{display:block;max-width:none;padding:0;margin:0}main{border:0;padding:0}pre{white-space:pre-wrap;background:#eee;color:black}h2{break-after:avoid}table{display:table}a{color:inherit}}
+</style></head><body><header><a href="../EVM3588-B_音视频实时压缩方案.html">← 返回方案网页</a><p>EVM3588-B · IMX415/con7 · FFmpeg / MPP · 操作与设计文档</p></header>
+<div class="layout"><nav><strong>操作与学习目录</strong><a href="#section-2">1. 双击使用免安装版</a><a href="#section-3">2. 第一次连接</a><a href="#section-4">3. 看画面、HDMI 与状态卡片</a><a href="#section-5">4. 修改编码参数</a><a href="#section-6">5. 截图、录像与文件</a><a href="#section-7">6. 断开、退出与排错</a><a href="#section-8">7. 源码运行与打包</a><a href="#section-9">8. 程序结构与下一步修改</a></nav><main><h1 id="section-1">Windows 相机控制台：安装、操作与源码修改</h1>
+<p>版本 1.0.0。中文深色桌面软件已实现，主界面为实时视频，右侧为设备连接、编码设置、媒体文件、运行日志。硬编仍在 RK3588 上进行，电脑负责控制、解码与下载。</p>
+<h2 id="section-2">1. 双击使用免安装版</h2>
+<p>本地交付文件是项目根目录的 <code>EVM3588CameraConsole-Windows-x64-v1.0.0.zip</code>，其 <code>.zip.sha256</code> 文件保存校验值。解压整个压缩包，进入 <code>EVM3588CameraConsole</code> 文件夹，双击 <code>EVM3588CameraConsole.exe</code>。</p>
+<p>保留 EXE、<code>_internal/</code>、<code>ffmpeg/</code>、许可说明和版本记录之间的相对位置。无需安装 Python；不要只把 EXE 单独拖到其它目录。可把 EXE 的快捷方式放在桌面。</p>
+<p>若采用终端解压，<strong>电脑 PowerShell，项目根目录</strong>：</p>
+<pre><code class="language-powershell">Expand-Archive -LiteralPath '.\EVM3588CameraConsole-Windows-x64-v1.0.0.zip' -DestinationPath '.\桌面控制台'
+</code></pre>
+<p>解释：<code>Expand-Archive</code> 解压 ZIP；<code>-LiteralPath</code> 按原样处理输入文件名；<code>-DestinationPath</code> 指定新目录。本示例目标目录应尚未使用，重复解压请换新目录。</p>
+<pre><code class="language-powershell">Start-Process -FilePath '.\桌面控制台\EVM3588CameraConsole\EVM3588CameraConsole.exe'
+</code></pre>
+<p>解释：<code>Start-Process</code> 启动可见的桌面程序；<code>-FilePath</code> 指向解压后的 EXE。这条命令在电脑执行，不能在开发板 Bash 中运行。</p>
+<h2 id="section-3">2. 第一次连接</h2>
+<ol>
+<li>保持板子通电，电脑与板子处于可互通的局域网。</li>
+<li>在“设备连接”填写板子地址，当前为 <code>192.168.2.221</code>；SSH 端口默认 22，用户名默认 root。</li>
+<li>选择密码登录，填写自己已有的 SSH 密码；或选择密钥登录并选择自己的私钥，按需填写私钥口令。</li>
+<li>点击“连接开发板”，核对弹出的 SSH 主机指纹，确认后保存。指纹改变时软件拒绝连接，需要先查明板子身份或重刷系统的情况。</li>
+<li>软件读取板端能力与状态。已有直播时直接显示，不重复启动摄像头采集。</li>
+</ol>
+<p>“记住密码”可选择使用 Windows 凭据管理器保存；配置文件不保存明文密码。软件验收使用的临时密钥不会随包交付，使用时应输入自己的认证信息。</p>
+<p>如果忘记 SSH 密码但仍能通过 ADB 登录，<strong>电脑 PowerShell，项目根目录</strong>：</p>
+<pre><code class="language-powershell">$adbPath = 'C:\Users\dvsense_docker\Desktop\work\RK3588\Tools\platform-tools\adb.exe'
+</code></pre>
+<p>解释：保存本机 ADB 路径，其它电脑替换成真实路径。</p>
+<pre><code class="language-powershell">&amp; $adbPath shell
+</code></pre>
+<p>解释：<code>&amp;</code> 执行 ADB；<code>shell</code> 进入开发板 Bash。下一条命令在出现 <code>root@ema</code> 后执行。</p>
+<p><strong>开发板 Bash，仅在自己需要设置新密码时</strong>：</p>
+<pre><code class="language-bash">passwd root
+</code></pre>
+<p>解释：为 root 账户交互设置新密码，需要输入两次；终端不回显密码。它会改变原有密码，因此已有可用 SSH 认证时不需要执行。密码在本地输入，不要发到聊天或提交到 Git。</p>
+<h2 id="section-4">3. 看画面、HDMI 与状态卡片</h2>
+<p>连接成功且直播运行后，中央显示实时画面。视频保持原始宽高比，黑边表示适配窗口；最大预览宽度 1280，不改变板端编码和录像的 1920×1080。</p>
+<table>
+<thead>
+<tr>
+<th>控件</th>
+<th>实际作用</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>启动直播</td>
+<td>启动板端 FFmpeg / VPU 编码与 RTSP 发布</td>
+</tr>
+<tr>
+<td>停止直播</td>
+<td>正常封口正在进行的录像，再结束此服务的 HDMI 和采集</td>
+</tr>
+<tr>
+<td>HDMI 开启/关闭</td>
+<td>控制板子连接的显示屏，电脑预览可以继续</td>
+</tr>
+<tr>
+<td>重新播放</td>
+<td>只重建电脑解码器，不重启板端摄像头</td>
+</tr>
+<tr>
+<td>全屏</td>
+<td>全屏显示实时视频，按 Esc 或“返回控制台”退出</td>
+</tr>
+<tr>
+<td>SSH / 视频卡片</td>
+<td>分别表示控制连接与电脑解码状态，SSH 断开不等于直播结束</td>
+</tr>
+<tr>
+<td>VPU / HDMI / 录像卡片</td>
+<td>以板端实际状态为依据，不根据按钮点击推断成功</td>
+</tr>
+</tbody>
+</table>
+<p>底部显示帧进度、丢帧、补帧、订阅者数量和更新时间。历史错误记入日志，已经恢复的直播不会仅因旧错误被标成失败。</p>
+<h2 id="section-5">4. 修改编码参数</h2>
+<p>打开“编码设置”，选择 H.265 或 H.264，填写宽高、帧率、码率、GOP，然后点击“应用参数并重启直播”。</p>
+<ul>
+<li>默认 H.265、1920×1080、30 fps、2.5 Mbit/s、GOP 30。</li>
+<li>本板 ISP 尺寸步长为 8，宽高应为 8 的倍数，仍需满足固件与传感器实际支持。</li>
+<li>码率单位 Mbit/s；2.5 对应板端 2500000 bit/s。GOP 30 在 30 fps 下约每秒一个关键帧。</li>
+<li>当前传感器实际为 30 fps，界面限制编码帧率不超过实际采集帧率；降低编码帧率采用抽帧，不改变传感器曝光和读出模式。低帧率时可同步降低 GOP，减少加入直播等待关键帧的时间。</li>
+<li>“高级：采集节点”默认 <code>/dev/video44</code>，不确定节点时保持默认。</li>
+<li>右侧“运行值”来自板端查询；实际采集尺寸单独确认，不能把填入值当作驱动已经采用。</li>
+<li>录像时应用按钮被禁用，应先停止录像并等待封口。</li>
+<li>参数失败时尝试恢复原直播，并报告恢复结果；没有硬编器时明确失败，不切换软件编码。</li>
+</ul>
+<h2 id="section-6">5. 截图、录像与文件</h2>
+<p>点击底部“截图”，从当前 RTSP 取得 JPEG，自动下载到电脑保存目录，并在“媒体文件”展示最近截图缩略图。</p>
+<p>点击“开始录像”，板端创建新的 MP4。直播、HDMI、电脑预览同时继续运行。点击“停止录像”，等待正常封口和 ffprobe 验证；完成后可选中列表中的文件下载，或勾选“停止录像后自动下载”。</p>
+<p>媒体列表显示文件名、大小与状态；<code>partial.mp4</code> 标为写入中，不作为完成文件下载。下载采用单独 SFTP 连接，进度实时显示，可以取消。取消或失败会清理本次 <code>.part</code> 文件，不删除板端录像。</p>
+<p>“打开最近下载的文件”会在软件内循环回放 MP4；JPEG 使用电脑默认图片查看器。“打开目录”进入电脑保存位置。软件当前不提供自动删除板端录像功能。</p>
+<p>板端空间不足 1 GiB 时拒绝新录像；录像中触及阈值时结束录像，直播保留。结束失败的 partial 文件保留在板端供排查。</p>
+<h2 id="section-7">6. 断开、退出与排错</h2>
+<p>“断开控制与电脑预览”关闭电脑连接，板端任务继续运行。直接关闭软件同样不会停止板端直播和录像；需要结束板端任务时先点击“停止录像”或“停止直播”。</p>
+<table>
+<thead>
+<tr>
+<th>现象</th>
+<th>处理</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>SSH 认证失败</td>
+<td>核对用户名、密码、密钥与私钥口令；确认账号允许 SSH 登录</td>
+</tr>
+<tr>
+<td>主机指纹不匹配</td>
+<td>核对是否换板、重刷系统或 IP 指向另一台设备，不能直接忽略校验</td>
+</tr>
+<tr>
+<td>摄像头占用</td>
+<td>停止自己另开的采集程序；软件不会自动杀无关进程</td>
+</tr>
+<tr>
+<td>视频连接失败 / 404</td>
+<td>查询直播状态；未运行时点击启动，运行中可点击重新播放</td>
+</tr>
+<tr>
+<td>参数失败但原画面恢复</td>
+<td>查看错误详情，改回设备支持的参数</td>
+</tr>
+<tr>
+<td>下载失败</td>
+<td>核对网络和保存目录；重新选中已经完成的文件下载</td>
+</tr>
+<tr>
+<td>软件打不开</td>
+<td>确认整个便携文件夹已完整解压，保留依赖目录</td>
+</tr>
+</tbody>
+</table>
+<p>打开“运行日志”，可筛选连接、控制、编码、录像、播放和文件事件，并读取板端最近日志。配置、主机指纹与轮转日志在 <code>%LOCALAPPDATA%\EVM3588CameraConsole\</code>。日志与下载文件不会自动上传 GitHub。</p>
+<h2 id="section-8">7. 源码运行与打包</h2>
+<p>本节供继续开发。<strong>电脑 PowerShell，项目根目录</strong>：</p>
+<pre><code class="language-powershell">python -m venv .venv-desktop
+</code></pre>
+<p>解释：使用本机 Python 创建独立虚拟环境，不改动已有 Python 包。当前构建使用 Python 3.10.19。</p>
+<pre><code class="language-powershell">.\.venv-desktop\Scripts\python.exe -m pip install -r .\desktop\requirements.lock.txt
+</code></pre>
+<p>解释：用虚拟环境的 Python 执行 pip，<code>-r</code> 读取固定版本依赖，包括 PySide6、Paramiko、keyring、打包与测试工具。</p>
+<pre><code class="language-powershell">powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\desktop\run.ps1
+</code></pre>
+<p>解释：启动子进程，<code>-NoProfile</code> 不加载个人配置，<code>-ExecutionPolicy Bypass</code> 为本次进程放行，<code>-File</code> 指定启动脚本；它运行源码界面。</p>
+<pre><code class="language-powershell">.\.venv-desktop\Scripts\python.exe -m pytest .\desktop\tests -q
+</code></pre>
+<p>解释：运行桌面控制、帧拼接、下载保护、界面结果处理等自动测试；<code>-q</code> 输出简洁结果。这组测试不会启停真实开发板。</p>
+<pre><code class="language-powershell">.\.venv-desktop\Scripts\python.exe .\desktop\tests\live_monitor.py --seconds 1800
+</code></pre>
+<p>解释：打开真实桌面监测窗口，先在窗口中连接已经运行的直播；出画面后计时 1800 秒，即 30 分钟。期间只查询状态和读取视频，禁用窗口操作，完成后将结果保存到用户目录 <code>live-acceptance.json</code>，关闭电脑预览而保留板端直播。</p>
+<pre><code class="language-powershell">.\.venv-desktop\Scripts\python.exe .\desktop\build.py
+</code></pre>
+<p>解释：用 PyInstaller 生成免安装目录，复制电脑现有 FFmpeg，附版本与许可记录，再生成 ZIP 与 SHA256。电脑需能从 PATH 找到 <code>ffmpeg.exe</code>；需要指定位置时加 <code>--ffmpeg</code> 并传入完整路径。构建产物在 <code>desktop/dist/</code>，ZIP 在项目根目录。</p>
+<pre><code class="language-powershell">powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\deploy.ps1
+</code></pre>
+<p>解释：上传板端代码，参数含义同源码启动命令。桌面程序与板端程序分开部署；上传不会自动重启当前直播。更新控制接口后须在板端安排重启，正常使用便携 EXE 不需要每次执行。</p>
+<h2 id="section-9">8. 程序结构与下一步修改</h2>
+<table>
+<thead>
+<tr>
+<th>模块</th>
+<th>责任</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>desktop/main.py</code></td>
+<td>应用启动、图标与窗口尺寸</td>
+</tr>
+<tr>
+<td><code>evm_console/window.py</code>、<code>widgets.py</code></td>
+<td>中文界面、状态与按钮、回放窗口</td>
+</tr>
+<tr>
+<td><code>evm_console/ssh.py</code></td>
+<td>主机指纹、SSH 后台队列、JSON 控制、重连</td>
+</tr>
+<tr>
+<td><code>evm_console/video.py</code></td>
+<td>FFmpeg 解码、完整帧拼接、最新帧和视频看门狗</td>
+</tr>
+<tr>
+<td><code>evm_console/files.py</code></td>
+<td>SFTP 列表、下载、路径检查与取消</td>
+</tr>
+<tr>
+<td><code>evm_console/core.py</code></td>
+<td>连接配置、能力默认值、错误解释与结果校验</td>
+</tr>
+<tr>
+<td><code>board/ffmpeg_pipeline/avctl.py</code></td>
+<td>板端硬编与进程管理、参数恢复、录像封口</td>
+</tr>
+</tbody>
+</table>
+<p>新增相机功能时，先在板端实现并验证 JSON 操作，再加入后台调用与 UI 状态，不在按钮回调中直接执行阻塞 SSH。算法处理应使用独立帧消费者；不要让算法耗时堆积预览帧。</p>
+<p>本版已实现与实际验收数据见 <a href="Windows_%E7%9B%B8%E6%9C%BA%E6%8E%A7%E5%88%B6%E5%8F%B0%E9%AA%8C%E6%94%B6%E8%AE%B0%E5%BD%95.md">Windows 桌面验收记录</a>。曝光、增益、ROI、识别算法、音频与多路相机属于后续扩展。原 <a href="FFmpeg_%E5%85%A8%E9%93%BE%E8%B7%AF%E6%93%8D%E4%BD%9C%E6%8C%87%E5%8D%97.md">FFmpeg 命令行指南</a> 和 <a href="%E8%B7%AF%E7%BA%BF%E4%BA%8C_MPP_C_API_%E6%93%8D%E4%BD%9C%E4%B8%8E%E4%BF%AE%E6%94%B9%E6%8C%87%E5%8D%97.md">MPP C API 学习指南</a> 继续保留。</p>
+</main></div></body></html>

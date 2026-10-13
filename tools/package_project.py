@@ -11,11 +11,11 @@ files = [ROOT / name for name in (
     "deploy.ps1", "refresh_status.ps1", "README.txt", "README.md",
     "board_status.example.js", "EVM3588-B_音视频实时压缩方案.html",
 )]
-for directory in ("board", "docs", "tools"):
+for directory in ("board", "docs", "tools", "desktop"):
     files.extend(path for path in (ROOT / directory).rglob("*")
-                 if path.is_file() and not any(part in {'runtime','build','state','logs','recordings','snapshots','__pycache__'} for part in path.relative_to(ROOT).parts)
+                 if path.is_file() and not any(part in {'runtime','build','dist','vendor','state','logs','recordings','snapshots','__pycache__'} for part in path.relative_to(ROOT).parts)
                  and path.name != 'config.json' and (path.suffix in {".sh", ".c", ".h", ".md", ".html", ".py", ".json", ".yml", ".patch"}
-                                       or path.name == "Makefile"))
+                                       or path.suffix in {'.txt','.ps1','.svg'} or path.name == "Makefile"))
 
 entries = []
 for source in sorted(set(files)):

@@ -10,8 +10,8 @@ nav{align-self:start;position:sticky;top:20px;background:white;border:1px solid 
 main{min-width:0;background:white;border:1px solid var(--line);border-radius:12px;padding:32px 40px}h1{font-size:28px;line-height:1.4;margin-top:0}h2{font-size:23px;border-top:1px solid var(--line);padding-top:28px;margin-top:40px;scroll-margin-top:18px}h3{font-size:19px;scroll-margin-top:18px}p{margin:12px 0}a{color:var(--blue)}code{font:14px/1.6 Consolas,monospace;background:#eef4f7;border-radius:4px;padding:2px 5px;overflow-wrap:anywhere}pre{padding:18px 20px;border-radius:9px;background:#15364a;color:#e8f6ff;overflow-x:auto;line-height:1.65;white-space:pre}pre code{background:transparent;padding:0;color:inherit;overflow-wrap:normal}table{display:block;overflow-x:auto;width:100%;border-collapse:collapse;margin:18px 0;font-size:14px}th,td{border:1px solid var(--line);padding:10px 12px;vertical-align:top;min-width:110px}th{background:#edf5f8}li{margin:6px 0}strong{color:#0d5270}
 @media(max-width:900px){.layout{display:block;margin:16px auto;padding:0 14px}nav{position:static;margin-bottom:16px}main{padding:22px 18px}h1{font-size:24px}}@media print{header,nav{display:none}.layout{display:block;max-width:none;padding:0;margin:0}main{border:0;padding:0}pre{white-space:pre-wrap;background:#eee;color:black}h2{break-after:avoid}table{display:table}a{color:inherit}}
 </style></head><body><header><a href="../EVM3588-B_音视频实时压缩方案.html">← 返回方案网页</a><p>EVM3588-B · IMX415/con7 · FFmpeg / MPP · 操作与设计文档</p></header>
-<div class="layout"><nav><strong>操作与学习目录</strong><a href="#section-2">1. 技术选择与开源参考</a><a href="#section-3">2. 模块与线程安排</a><a href="#section-4">3. 五个界面</a><a href="#section-5">4. 已实现控制协议</a><a href="#section-6">5. 文件与凭据</a><a href="#section-7">6. 参数与相机能力边界</a><a href="#section-8">7. 下一阶段开发与验收</a></nav><main><h1 id="section-1">Windows 上位机设计与开源调研</h1>
-<p>本轮交付设计与板端接口。Windows 桌面程序将在下一阶段实现；当前可运行的是 FFmpeg 硬编、RTSP、HDMI、录像、截图和 <code>avctl.py</code>。调研日期：2026-10-13。</p>
+<div class="layout"><nav><strong>操作与学习目录</strong><a href="#section-2">1. 技术选择与开源参考</a><a href="#section-3">2. 模块与线程安排</a><a href="#section-4">3. 五个界面</a><a href="#section-5">4. 已实现控制协议</a><a href="#section-6">5. 文件与凭据</a><a href="#section-7">6. 参数与相机能力边界</a><a href="#section-8">7. 首版实现与后续扩展</a></nav><main><h1 id="section-1">Windows 上位机设计与开源调研</h1>
+<p>本文记录架构设计与开源参考，调研日期：2026-10-13。Windows 桌面程序 1.0.0 已实现，入口为 <code>desktop/</code>；实际使用见 <a href="Windows_%E7%9B%B8%E6%9C%BA%E6%8E%A7%E5%88%B6%E5%8F%B0%E6%93%8D%E4%BD%9C%E6%8C%87%E5%8D%97.md">桌面操作指南</a>，验证范围见 <a href="Windows_%E7%9B%B8%E6%9C%BA%E6%8E%A7%E5%88%B6%E5%8F%B0%E9%AA%8C%E6%94%B6%E8%AE%B0%E5%BD%95.md">桌面验收记录</a>。</p>
 <h2 id="section-2">1. 技术选择与开源参考</h2>
 <p>采用 Windows + PySide6 界面、Paramiko SSH/SFTP 控制、独立 FFmpeg 解码进程。视频经 RTSP 传输，SSH 只传控制与状态，SFTP 下载文件。</p>
 <table>
@@ -103,7 +103,7 @@ main{min-width:0;background:white;border:1px solid var(--line);border-radius:12p
 </table>
 <p>连接成功先调用 <code>check</code> 和 <code>status</code>，不擅自启动第二个采集进程。所有按钮随实际状态变化，调用失败还原按钮状态。编码参数同时显示“输入值”与“运行值”，避免将提交成功误判为实际采集成功。</p>
 <h2 id="section-5">4. 已实现控制协议</h2>
-<p>SSH 上执行固定入口，命令名只从允许列表选择。配置 JSON 写入 channel stdin，不把用户输入拼接到 shell 命令。请求超时采用 35 秒；轮询 <code>status</code> 默认每秒一次，上一轮未结束则不叠加请求。</p>
+<p>SSH 上执行固定入口，命令名只从允许列表选择。配置 JSON 写入 channel stdin，不把用户输入拼接到 shell 命令。普通板端请求超时 35 秒，启停请求为恢复与封口预留 75 秒；桌面对应等待 40/80 秒。轮询 <code>status</code> 默认每秒一次，上一轮未结束则不叠加请求。</p>
 <p>开发板 Bash，查询状态：</p>
 <pre><code class="language-bash">python3 /userdata/av_dev/ffmpeg_pipeline/avctl.py status
 </code></pre>
@@ -164,16 +164,10 @@ main{min-width:0;background:white;border:1px solid var(--line);border-radius:12p
 <p>密码交给 Windows Credential Manager，例如使用 keyring 访问；配置文件只存 IP、端口、用户、密钥位置和编码参数。主机指纹变化必须显式提示，不静默接受。不要把密码、私钥、实际运行快照写进 Git。</p>
 <p>SFTP 下载只允许板端 <code>recordings/</code> 与 <code>snapshots/</code> 内由接口返回的文件；先校验规范化路径，再写本地 <code>.part</code>，核对长度后改名。首版下载限制一个任务；录像仍在写入时不下载成“完整 MP4”。删除文件应是后续独立功能，当前不会自动清理板端文件。</p>
 <h2 id="section-7">6. 参数与相机能力边界</h2>
-<p>首版支持 H.264/H.265 选择，板端入口已有两种 rkmpp 编码器检测与选择；本轮完整硬件验收使用 H.265，H.264 切换仍需下一阶段独立实测。分辨率和帧率输入须同时满足板端范围与设备实际支持，不能只验证控件数值。</p>
+<p>首版支持 H.264/H.265 选择，两种编码在实际开发板与桌面软件中切换出画面已验证，持续验收使用 H.265。分辨率和帧率输入须同时满足板端范围与设备实际支持，不能只验证控件数值。</p>
 <p>曝光、增益、白平衡、ROI、动态码率和算法按钮先按能力报告展示。RKAIQ 自动曝光仍在工作，不直接写传感器寄存器或在 GUI 中绕过 3A。下一阶段先研究厂商 RKAIQ 手动控制接口，再增加安全切换自动/手动的板端 API。</p>
 <p>JPEG 截图、MP4 录像和统计为本轮已实现处理；目标检测、外网访问、多路相机与音频同步尚未开发。浏览器预览需要另外选择 WebRTC/HLS 与浏览器兼容编码，不能假定 HTML 能直接播放 RTSP H.265。</p>
-<h2 id="section-8">7. 下一阶段开发与验收</h2>
-<ol>
-<li>先实现连接页和 SSH Worker，验证主机指纹、超时、断线重连、JSON 错误及状态同步。</li>
-<li>实现单画面视频页与 FFmpeg Worker，验证连续解码、最新帧队列和退出清理。</li>
-<li>接入启停与编码页，测试两种编码、参数受控重启、录像期间拒绝切换。</li>
-<li>接入录像、截图、SFTP 下载和日志页，验证下载文件可回放、失败可重试。</li>
-<li>在 Windows 上运行 30 分钟，覆盖 SSH/网络故障与十次连接关闭；检查无残留解码进程、无 UI 卡顿。</li>
-</ol>
+<h2 id="section-8">7. 首版实现与后续扩展</h2>
+<p>连接、SSH Worker、FFmpeg 最新帧预览、编码设置、录像/截图、SFTP、日志与免安装打包均已实现。详细实测数据统一记录在桌面验收记录中，不以设计目标替代测试结果。</p>
 <p>首版交付后再接入算法 Worker：独立订阅解码帧，限制队列和耗时，避免算法延迟阻塞视频与控制。PyAV 可以在该阶段做帧和时间戳接口；采用前需用本机 Windows 依赖版本测试。</p>
 </main></div></body></html>

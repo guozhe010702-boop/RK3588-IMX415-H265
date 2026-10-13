@@ -8,7 +8,9 @@ EVM3588-B / IMX415 / FFmpeg H.265 全链路
 先打开 docs/FFmpeg_全链路操作指南.html。
 每条命令标明电脑 PowerShell 或板端 Bash，并解释参数。
 实测数据：docs/FFmpeg_全链路验收记录.html。
-上位机设计：docs/Windows_上位机设计与开源调研.html；桌面程序下一阶段开发。
+桌面软件：本地 EVM3588CameraConsole-Windows-x64-v1.0.0.zip，解压后双击 EXE。
+桌面操作：docs/Windows_相机控制台操作指南.html；支持预览、参数、录像、截图、下载。
+设计参考：docs/Windows_上位机设计与开源调研.html。
 MPP C API 学习：docs/路线二_MPP_C_API_操作与修改指南.html。
 
 Windows 上传（项目根目录的电脑 PowerShell）：

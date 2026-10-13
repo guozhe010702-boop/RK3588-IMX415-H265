@@ -30,7 +30,9 @@ MIN_FREE = 1024 ** 3
 
 
 class ControlError(Exception):
-    pass
+    def __init__(self, message, recovery=None):
+        super().__init__(message)
+        self.recovery = recovery
 
 
 def validate_config(value):
@@ -84,6 +86,12 @@ def camera_owners(device):
         raise ControlError('Camera ownership check failed: '+result.stderr[-1000:])
     return sorted(set(result.stdout.split()))
 
+def sensor_frame_rate(device):
+    if device!='/dev/video44' or not shutil.which('v4l2-ctl'): return None
+    result=subprocess.run(['v4l2-ctl','-d','/dev/v4l-subdev2','--get-subdev-fps'],capture_output=True,text=True,timeout=3)
+    found=re.search(r'Frames per second:\s*([\d.]+)',result.stdout)
+    return float(found[1]) if result.returncode==0 and found else None
+
 
 class Controller:
     def __init__(self, root=ROOT):
@@ -94,9 +102,11 @@ class Controller:
         self.ffprobe = str(self.root/'runtime/bin/ffprobe')
         self.environment = dict(os.environ, LD_LIBRARY_PATH=str(self.root/'runtime/lib')+':'+str(self.root/'runtime/lib64'))
         self.lock = threading.RLock()
+        self.operation_lock = threading.RLock()
         self.capture = self.recorder = self.preview = None
         self.capture_log = self.record_log = None
         self.capture_started = self.record_started = None
+        self.capture_stopped_at = 0.0
         self.record_temp = None
         self.progress = {}
         self.last_frame_at = 0.0
@@ -122,6 +132,7 @@ class Controller:
             result = subprocess.run([self.ffmpeg,'-hide_banner','-encoders'],env=self.environment,capture_output=True,text=True,timeout=10)
             encoders = [name for name in ('hevc_rkmpp','h264_rkmpp') if re.search(r'\b'+name+r'\b',result.stdout)]
         return {'ffmpeg':self.ffmpeg,'encoders':encoders,'vpuDevicePresent':Path('/dev/mpp_service').exists(),
+                'sensorFramesPerSecond':sensor_frame_rate(self.config['device']),
                 'cameraPresent':Path(self.config['device']).exists(),'config':self.config,
                 'runtimeBuilt':Path(self.root/'runtime/build-manifest.json').exists(),
                 'freeBytes':shutil.disk_usage(self.root).free}
@@ -147,8 +158,16 @@ class Controller:
                     except OSError:
                         pass
             frame = int(self.progress.get('frame','0') or 0)
+            actual = None
+            if capture_alive and frame:
+                for line in tail(self.capture_log,80):
+                    found=re.search(r'Video: rawvideo.*?\b(nv12)\b.*?(\d+)x(\d+).*?([\d.]+) fps',line)
+                    if found:
+                        actual={'pixelFormat':found[1],'width':int(found[2]),'height':int(found[3]),'reportedFps':float(found[4])}
+                        break
             return {'sampledAt':stamp(),'state':'running' if capture_alive and recent and media.get('ready') else ('starting' if capture_alive else ('recovering' if self.want_capture else 'stopped')),
                     'config':self.config,'encoder':'hevc_rkmpp' if self.config['codec']=='h265' else 'h264_rkmpp',
+                    'actualCapture':actual,
                     'capturePid':self.capture.pid if capture_alive else None,'captureStartedAt':self.capture_started,
                     'frame':frame,'fps':self.progress.get('fps'),'outTimeUs':self.progress.get('out_time_us'),
                     'duplicateFrames':self.progress.get('dup_frames'),'droppedFrames':self.progress.get('drop_frames'),
@@ -184,20 +203,27 @@ class Controller:
                                     stderr=output,text=progress,bufsize=1 if progress else -1,start_new_session=True)
 
     def begin_capture(self):
+        # The BSP camera pipeline needs a short settle period after STREAMOFF.
+        time.sleep(max(0,0.5-(time.monotonic()-self.capture_stopped_at)))
         device = self.config['device']
         owners = camera_owners(device)
         if owners:
             raise ControlError('Camera busy; owner PID(s): '+' '.join(owners))
         c = self.config
+        source_fps=sensor_frame_rate(device) or c['fps']
+        if c['fps']>source_fps+0.01: raise ControlError('Requested fps exceeds actual sensor frame interval: '+str(source_fps))
+        timing='setpts=N/({}*TB)'.format(source_fps)
+        if c['fps']<source_fps-0.01: timing+=',fps=fps={}:start_time=0'.format(c['fps'])
         encoder = 'hevc_rkmpp' if c['codec']=='h265' else 'h264_rkmpp'
         if encoder not in self.check()['encoders']:
             raise ControlError('Required hardware encoder unavailable: '+encoder)
         self.capture_log = self.root/'logs'/('capture-'+run_id()+'.log')
         args = [self.ffmpeg,'-hide_banner','-nostdin','-nostats','-loglevel','info','-stats_period','1','-progress','pipe:1',
                 '-f','v4l2','-input_format','nv12','-video_size','{}x{}'.format(c['width'],c['height']),
-                '-framerate',str(c['fps']),'-i',device,'-map','0:v:0','-an','-c:v',encoder,'-rc_mode','CBR',
+                '-framerate',str(source_fps),'-i',device,'-map','0:v:0','-an','-c:v',encoder,'-rc_mode','CBR',
                 '-b:v',str(c['bitrate']),'-maxrate',str(c['bitrate']),'-minrate',str(c['bitrate']),
-                '-g',str(c['gop']),'-bf','0','-r',str(c['fps']),'-f','rtsp','-rtsp_transport','tcp',URL]
+                '-g',str(c['gop']),'-bf','0','-vf',timing,
+                '-fps_mode','passthrough','-f','rtsp','-rtsp_transport','tcp',URL]
         self.progress = {}; self.last_frame_at = 0.0
         self.capture = self.spawn_logged(args,self.capture_log,progress=True)
         self.capture_started = stamp()
@@ -220,25 +246,71 @@ class Controller:
                 raise ControlError('Stop and finalize recording before changing the stream')
             if self.active(self.capture) and requested == self.config:
                 return self.status()
+            sensor_fps=sensor_frame_rate(requested['device'])
+            if sensor_fps and requested['fps']>sensor_fps+0.01:
+                raise ControlError('Requested fps exceeds actual sensor frame interval: '+str(sensor_fps))
+            previous=dict(self.config)
+            restore=self.active(self.capture)
+            preview=self.want_preview
+            self.want_preview=False
             self.want_capture = False
             self.stop_child(self.capture)
+            self.capture_stopped_at=time.monotonic()
             self.stop_child(self.preview,3); self.preview=None
             self.capture = None
-            self.config = requested
-            atomic_json(self.root/'config.json',self.config)
             self.retry_times = []
+        try:
+            state=self.launch_ready(requested)
+            self.want_preview=preview
+            self.last_error=None
+            return state
+        except Exception as error:
+            message=str(error)
+            with self.lock:
+                self.want_capture=False
+                self.stop_child(self.capture)
+                self.capture=None
+                self.config=previous
+                atomic_json(self.root/'config.json',previous)
+            recovery={'attempted':restore,'restored':False}
+            if restore:
+                try:
+                    self.launch_ready(previous)
+                    self.want_preview=preview
+                    recovery['restored']=True
+                except Exception as failure:
+                    self.want_capture=False
+                    self.stop_child(self.capture); self.capture=None
+                    recovery['error']=str(failure)
+            self.last_error={'at':stamp(),'message':message,'recovery':recovery}
+            raise ControlError(message,recovery)
+
+    def launch_ready(self, config):
+        for attempt in range(2):
+            try: return self.launch_ready_attempt(config)
+            except ControlError as error:
+                if attempt or 'Encoder did not produce a ready stream' not in str(error): raise
+                self.capture_stopped_at=time.monotonic()
+
+    def launch_ready_attempt(self, config):
+        with self.lock:
+            self.config=dict(config)
+            atomic_json(self.root/'config.json',self.config)
             self.begin_capture()
-            self.want_capture = True
-            self.last_error = None
-        deadline=time.monotonic()+10
+        deadline=time.monotonic()+5
         while time.monotonic() < deadline:
             state=self.status()
-            if state['state']=='running': return state
+            if state['state']=='running':
+                actual=state.get('actualCapture')
+                if actual and (actual['width']!=config['width'] or actual['height']!=config['height']):
+                    raise ControlError('Driver selected a different capture size: '+json.dumps(actual))
+                self.want_capture=True
+                return state
             if not self.active(self.capture): break
             time.sleep(0.1)
         with self.lock:
             self.want_capture=False
-            self.stop_child(self.capture)
+            self.stop_child(self.capture,3)
             self.capture=None
             self.last_error={'at':stamp(),'message':'Encoder did not produce a ready stream','log':tail(self.capture_log,15)}
         raise ControlError(json.dumps(self.last_error))
@@ -326,6 +398,7 @@ class Controller:
             record_result=self.record_stop()
             self.preview_stop()
             self.stop_child(self.capture); self.capture=None
+            self.capture_stopped_at=time.monotonic()
             self.progress={}; self.last_frame_at=0.0
             return {'state':'stopped','recordingResult':record_result}
 
@@ -375,11 +448,17 @@ class Handler(socketserver.StreamRequestHandler):
         try:
             request=json.loads(self.rfile.readline(16385))
             if not isinstance(request,dict): raise ControlError('Request must be an object')
-            result=self.server.controller.execute(request.get('action'),request.get('payload',{}))
+            action=request.get('action')
+            if action in ('check','status','logs'):
+                result=self.server.controller.execute(action,request.get('payload',{}))
+            else:
+                with self.server.controller.operation_lock:
+                    result=self.server.controller.execute(action,request.get('payload',{}))
             response={'ok':not (isinstance(result,dict) and 'error' in result),'result':result}
             if not response['ok']: response['error']=result['error']
         except Exception as error:
             response={'ok':False,'error':str(error)}
+            if getattr(error,'recovery',None) is not None: response['result']={'recovery':error.recovery}
         self.wfile.write((json.dumps(response,ensure_ascii=False)+'\n').encode('utf-8'))
 
 
@@ -416,7 +495,7 @@ def request(action,payload):
         if action in ('status','stop','record-stop','preview-stop'): return {'ok':True,'result':{'state':'stopped','recording':False}}
         raise ControlError('Controller is not running')
     with socket.socket(socket.AF_UNIX,socket.SOCK_STREAM) as client:
-        client.settimeout(35); client.connect(str(endpoint))
+        client.settimeout(75 if action in ('start','stop') else 35); client.connect(str(endpoint))
         client.sendall((json.dumps({'action':action,'payload':payload})+'\n').encode('utf-8'))
         with client.makefile('rb') as reader: return json.loads(reader.readline())
 

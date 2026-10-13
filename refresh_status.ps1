@@ -90,7 +90,7 @@ if ($useFFmpeg) {
     $remoteConnected = $false
     foreach ($line in $rtspConnections) {
         $columns = @($line.Trim() -split '\s+')
-        if ($columns.Count -ge 5 -and $columns[0] -eq 'ESTAB' -and $columns[4] -notmatch '^(127\.|\[?::1\]?:)') { $remoteConnected = $true }
+        if ($columns.Count -ge 5 -and $columns[0] -eq 'ESTAB' -and $columns[4] -notmatch '^(127\.|\[?::1\]?:|\[?::ffff:127\.)') { $remoteConnected = $true }
     }
     $status.pipelineType = 'ffmpeg'
     if ($ffState.config) { $status.camera = $ffState.config.device }
