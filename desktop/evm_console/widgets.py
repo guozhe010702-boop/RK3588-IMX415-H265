@@ -1,8 +1,8 @@
-from PySide6.QtCore import Qt,QRectF
-from PySide6.QtGui import QImage,QPainter,QPen,QColor
-from PySide6.QtWidgets import QWidget,QLabel,QVBoxLayout,QFrame
+from PySide6.QtCore import Qt, QRectF
+from PySide6.QtGui import QImage, QPainter, QPen, QColor
+from PySide6.QtWidgets import QWidget, QLabel, QVBoxLayout, QFrame
 
-STYLE='''
+STYLE = """
 * { font-family: "Microsoft YaHei UI", "Segoe UI"; font-size: 13px; color: #dce7f4; }
 QMainWindow,QDialog { background: #0b1220; }
 QWidget#page { background: #121e30; }
@@ -33,44 +33,93 @@ QProgressBar::chunk { background: #138e9f; border-radius: 4px; }
 QScrollArea { border: 0; background: transparent; } QScrollBar:vertical { background: #101c2e; width: 9px; }
 QScrollBar::handle:vertical { background: #3a516d; border-radius: 4px; min-height: 25px; }
 QToolTip { background: #20344e; border: 1px solid #5a789b; color: white; }
-'''
+"""
+
 
 class Badge(QLabel):
-    def __init__(self,title): super().__init__(); self.title=title; self.set_state(False)
-    def set_state(self,ok,text=None):
-        self.setText('●  '+self.title+' · '+(text or ('正常' if ok else '未连接')))
-        color='#6de0b7' if ok else '#8d9db3'
-        self.setStyleSheet(f'color:{color};background:#15263a;border:1px solid #2b405b;border-radius:14px;padding:6px 10px;')
+    def __init__(self, title):
+        super().__init__()
+        self.title = title
+        self.set_state(False)
+
+    def set_state(self, ok, text=None):
+        self.setText("●  " + self.title + " · " + (text or ("正常" if ok else "未连接")))
+        color = "#6de0b7" if ok else "#8d9db3"
+        self.setStyleSheet(
+            f"color:{color};background:#15263a;border:1px solid #2b405b;border-radius:14px;padding:6px 10px;"
+        )
+
 
 class Metric(QFrame):
-    def __init__(self,title,value='—'):
-        super().__init__(); self.setObjectName('metric'); layout=QVBoxLayout(self); layout.setContentsMargins(16,12,16,12)
-        label=QLabel(title); label.setObjectName('muted'); self.value=QLabel(value); self.value.setObjectName('metricValue')
-        layout.addWidget(label); layout.addWidget(self.value)
+    def __init__(self, title, value="—"):
+        super().__init__()
+        self.setObjectName("metric")
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(16, 12, 16, 12)
+        label = QLabel(title)
+        label.setObjectName("muted")
+        self.value = QLabel(value)
+        self.value.setObjectName("metricValue")
+        layout.addWidget(label)
+        layout.addWidget(self.value)
+
 
 class VideoCanvas(QWidget):
     def __init__(self):
-        super().__init__(); self.image=None; self.message='连接开发板，打开实时画面'; self.setMinimumSize(400,180)
-    def set_frame(self,data,width,height):
-        self.image=QImage(data,width,height,width*3,QImage.Format.Format_BGR888).copy(); self.message=''; self.update()
-    def set_message(self,text,clear=False):
-        self.message=text
-        if clear: self.image=None
+        super().__init__()
+        self.image = None
+        self.message = "连接开发板，打开实时画面"
+        self.setMinimumSize(400, 180)
+
+    def set_frame(self, data, width, height):
+        self.image = QImage(data, width, height, width * 3, QImage.Format.Format_BGR888).copy()
+        self.message = ""
         self.update()
-    def paintEvent(self,event):
-        painter=QPainter(self); painter.fillRect(self.rect(),QColor('#070e19'))
+
+    def set_message(self, text, clear=False):
+        self.message = text
+        if clear:
+            self.image = None
+        self.update()
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.fillRect(self.rect(), QColor("#070e19"))
         if self.image is not None:
-            size=self.image.size(); size.scale(self.size(),Qt.AspectRatioMode.KeepAspectRatio)
-            target=QRectF((self.width()-size.width())/2,(self.height()-size.height())/2,size.width(),size.height())
-            painter.drawImage(target,self.image)
+            size = self.image.size()
+            size.scale(self.size(), Qt.AspectRatioMode.KeepAspectRatio)
+            target = QRectF(
+                (self.width() - size.width()) / 2,
+                (self.height() - size.height()) / 2,
+                size.width(),
+                size.height(),
+            )
+            painter.drawImage(target, self.image)
             if self.message:
-                painter.fillRect(QRectF(0,self.height()-42,self.width(),42),QColor(5,12,24,220))
-                painter.setPen(QColor('#dce7f4')); painter.drawText(QRectF(12,self.height()-40,self.width()-24,38),Qt.AlignmentFlag.AlignVCenter,self.message)
+                painter.fillRect(
+                    QRectF(0, self.height() - 42, self.width(), 42), QColor(5, 12, 24, 220)
+                )
+                painter.setPen(QColor("#dce7f4"))
+                painter.drawText(
+                    QRectF(12, self.height() - 40, self.width() - 24, 38),
+                    Qt.AlignmentFlag.AlignVCenter,
+                    self.message,
+                )
         else:
-            painter.setPen(QPen(QColor('#102235'),1))
-            for x in range(0,self.width(),36): painter.drawLine(x,0,x,self.height())
-            for y in range(0,self.height(),36): painter.drawLine(0,y,self.width(),y)
-            painter.setPen(QPen(QColor('#2d7891'),3)); cx=self.width()/2; cy=self.height()/2-45
-            painter.drawRoundedRect(QRectF(cx-42,cy-28,84,56),8,8); painter.drawEllipse(QRectF(cx-15,cy-15,30,30))
-            painter.setPen(QColor('#a6c1d7')); painter.drawText(QRectF(20,cy+55,self.width()-40,60),Qt.AlignmentFlag.AlignHCenter,self.message)
+            painter.setPen(QPen(QColor("#102235"), 1))
+            for x in range(0, self.width(), 36):
+                painter.drawLine(x, 0, x, self.height())
+            for y in range(0, self.height(), 36):
+                painter.drawLine(0, y, self.width(), y)
+            painter.setPen(QPen(QColor("#2d7891"), 3))
+            cx = self.width() / 2
+            cy = self.height() / 2 - 45
+            painter.drawRoundedRect(QRectF(cx - 42, cy - 28, 84, 56), 8, 8)
+            painter.drawEllipse(QRectF(cx - 15, cy - 15, 30, 30))
+            painter.setPen(QColor("#a6c1d7"))
+            painter.drawText(
+                QRectF(20, cy + 55, self.width() - 40, 60),
+                Qt.AlignmentFlag.AlignHCenter,
+                self.message,
+            )
         painter.end()

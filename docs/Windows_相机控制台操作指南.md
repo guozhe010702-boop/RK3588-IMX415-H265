@@ -164,15 +164,19 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\deploy.ps1
 | 模块 | 责任 |
 | --- | --- |
 | `desktop/main.py` | 应用启动、图标与窗口尺寸 |
-| `evm_console/window.py`、`widgets.py` | 中文界面、状态与按钮、回放窗口 |
+| `evm_console/layout.py`、`widgets.py` | 中文界面布局、控件外观和画面绘制 |
+| `evm_console/window.py`、`playback.py` | 业务编排、状态与按钮、本地回放窗口 |
 | `evm_console/ssh.py` | 主机指纹、SSH 后台队列、JSON 控制、重连 |
 | `evm_console/video.py` | FFmpeg 解码、完整帧拼接、最新帧和视频看门狗 |
 | `evm_console/files.py` | SFTP 列表、下载、路径检查与取消 |
 | `evm_console/core.py` | 连接配置、能力默认值、错误解释与结果校验 |
-| `board/ffmpeg_pipeline/avctl.py` | 板端硬编与进程管理、参数恢复、录像封口 |
+| `board/ffmpeg_pipeline/avctl.py` | 稳定的板端 CLI 入口 |
+| `board/ffmpeg_pipeline/camera_control/` | 配置、通信、生命周期、参数恢复与录像封口 |
 
 新增相机功能时，先在板端实现并验证 JSON 操作，再加入后台调用与 UI 状态，不在按钮回调中直接执行阻塞 SSH。算法处理应使用独立帧消费者；不要让算法耗时堆积预览帧。
 
 本版已实现与实际验收数据见 [Windows 桌面验收记录](Windows_相机控制台验收记录.md)。曝光、增益、ROI、识别算法、音频与多路相机属于后续扩展。原 [FFmpeg 命令行指南](FFmpeg_全链路操作指南.md) 和 [MPP C API 学习指南](路线二_MPP_C_API_操作与修改指南.md) 继续保留。
 
 1.1.0 的改动依据与后续优先级见 [优化调研与实施](Windows_控制台优化调研与实施.md)，新测试数据见 [优化验收记录](Windows_控制台优化验收记录.md)。
+
+源码阅读从 [项目程序逻辑与目录导航](项目程序逻辑与目录导航.md) 开始。本轮结构重构未替换已验收的 1.1.0 EXE 或板端运行实例。

@@ -32,7 +32,11 @@ with tempfile.TemporaryDirectory(prefix="mpp_guide_check_") as tmp:
         if checked.returncode:
             raise RuntimeError(f"{language} block {index}: " + checked.stderr.decode(errors="replace") + checked.stdout.decode(errors="replace"))
 
-for document in [ROOT / "README.md"] + guides:
+navigation = [ROOT / name for name in (
+    "README.md", "board/README.md", "board/ffmpeg_pipeline/README.md",
+    "board/v4l2_mpp_enc/README.md", "desktop/README.md",
+)]
+for document in navigation + guides:
     for target in re.findall(r"\]\(([^)]+)\)", document.read_text(encoding="utf-8")):
         if "://" not in target and not target.startswith("#"):
             assert (document.parent / target.split("#", 1)[0]).exists(), target

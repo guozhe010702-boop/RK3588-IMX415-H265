@@ -7,7 +7,8 @@ from .core import FrameAssembler, executable
 
 
 def preview_size(width, height, maximum):
-    if width <= 0 or height <= 0: raise ValueError('Invalid video dimensions')
+    if width <= 0 or height <= 0:
+        raise ValueError("Invalid video dimensions")
     output_width = max(2, min(maximum, width) // 2 * 2)
     return output_width, max(2, int(height * output_width / width) // 2 * 2)
 
@@ -15,8 +16,10 @@ def preview_size(width, height, maximum):
 def terminate(process):
     if process is not None:
         try:
-            if process.poll() is None: process.terminate()
-        except OSError: pass
+            if process.poll() is None:
+                process.terminate()
+        except OSError:
+            pass
 
 
 class VideoWorker(QThread):
@@ -37,7 +40,8 @@ class VideoWorker(QThread):
         self.first_frame_seconds = None
 
     def set_quality(self, width, fps):
-        with self.lock: self.maximum_width, self.maximum_fps = width, fps
+        with self.lock:
+            self.maximum_width, self.maximum_fps = width, fps
 
     def configure(self, url, width, height, token):
         with self.lock:
@@ -49,7 +53,8 @@ class VideoWorker(QThread):
                 self.latest = None
             self.desired = value
             process = self.process
-        if changed: terminate(process)
+        if changed:
+            terminate(process)
 
     def pause(self):
         with self.lock:
@@ -58,7 +63,7 @@ class VideoWorker(QThread):
             self.first_frame_seconds = None
             process = self.process
         terminate(process)
-        self.state.emit('未播放')
+        self.state.emit("未播放")
 
     def shutdown(self):
         self.stop_event.set()
@@ -72,7 +77,8 @@ class VideoWorker(QThread):
 
     def run(self):
         while not self.stop_event.is_set():
-            with self.lock: desired, generation = self.desired, self.generation
+            with self.lock:
+                desired, generation = self.desired, self.generation
             if not desired:
                 self.stop_event.wait(0.1)
                 continue
@@ -80,74 +86,125 @@ class VideoWorker(QThread):
             process = stderr = watchdog = None
             activity = [time.monotonic()]
             try:
-                self.state.emit('连接视频流…')
-                args = [executable('ffmpeg'), '-hide_banner', '-loglevel', 'warning', '-nostdin']
-                if url.startswith('rtsp://'):
-                    args += ['-timeout', '5000000', '-rtsp_transport', 'tcp', '-fflags', 'nobuffer', '-flags', 'low_delay', '-threads', '2']
-                else: args += ['-stream_loop', '-1', '-re', '-threads', '2']
-                filters = (f"fps=fps='if(gt(source_fps,0),min(source_fps,{fps}),{fps})',scale={width}:{height}:force_original_aspect_ratio=decrease,"
-                           f'pad={width}:{height}:(ow-iw)/2:(oh-ih)/2')
-                args += ['-i', url, '-map', '0:v:0', '-an', '-filter_threads', '1', '-vf', filters,
-                         '-pix_fmt', 'bgr24', '-threads', '1', '-f', 'rawvideo', 'pipe:1']
-                process = subprocess.Popen(args, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                                           creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0)
+                self.state.emit("连接视频流…")
+                args = [executable("ffmpeg"), "-hide_banner", "-loglevel", "warning", "-nostdin"]
+                if url.startswith("rtsp://"):
+                    args += [
+                        "-timeout",
+                        "5000000",
+                        "-rtsp_transport",
+                        "tcp",
+                        "-fflags",
+                        "nobuffer",
+                        "-flags",
+                        "low_delay",
+                        "-threads",
+                        "2",
+                    ]
+                else:
+                    args += ["-stream_loop", "-1", "-re", "-threads", "2"]
+                filters = (
+                    f"fps=fps='if(gt(source_fps,0),min(source_fps,{fps}),{fps})',scale={width}:{height}:force_original_aspect_ratio=decrease,"
+                    f"pad={width}:{height}:(ow-iw)/2:(oh-ih)/2"
+                )
+                args += [
+                    "-i",
+                    url,
+                    "-map",
+                    "0:v:0",
+                    "-an",
+                    "-filter_threads",
+                    "1",
+                    "-vf",
+                    filters,
+                    "-pix_fmt",
+                    "bgr24",
+                    "-threads",
+                    "1",
+                    "-f",
+                    "rawvideo",
+                    "pipe:1",
+                ]
+                process = subprocess.Popen(
+                    args,
+                    stdin=subprocess.DEVNULL,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
+                )
                 began = time.monotonic()
                 with self.lock:
                     # pause/configure can run while Popen creates the process.
-                    if generation != self.generation or self.stop_event.is_set(): continue
+                    if generation != self.generation or self.stop_event.is_set():
+                        continue
                     self.process, self.pid = process, process.pid
                     self.width, self.height = width, height
                     self.first_frame_seconds = None
-                stderr = threading.Thread(target=self.drain_log, args=(process, generation), daemon=True)
+                stderr = threading.Thread(
+                    target=self.drain_log, args=(process, generation), daemon=True
+                )
                 stderr.start()
-                watchdog = threading.Thread(target=self.watchdog, args=(process, generation, activity), daemon=True)
+                watchdog = threading.Thread(
+                    target=self.watchdog, args=(process, generation, activity), daemon=True
+                )
                 watchdog.start()
                 assembler = FrameAssembler(width * height * 3)
                 first = True
                 while not self.stop_event.is_set():
                     with self.lock:
-                        if generation != self.generation: break
+                        if generation != self.generation:
+                            break
                     chunk = process.stdout.read1(65536)
-                    if not chunk: break
+                    if not chunk:
+                        break
                     frame = assembler.feed(chunk)
                     if frame:
                         now = time.monotonic()
                         activity[0] = now
                         with self.lock:
-                            if generation != self.generation: break
+                            if generation != self.generation:
+                                break
                             self.last_frame = now
                             self.frames += 1
                             self.sequence += 1
                             self.latest = (frame, width, height, self.sequence)
                             if first:
                                 self.first_frame_seconds = now - began
-                                self.state.emit('实时画面')
+                                self.state.emit("实时画面")
                                 first = False
                 with self.lock:
                     if generation == self.generation and not self.stop_event.is_set():
                         self.reconnects += 1
-                        self.state.emit('视频中断，正在重连…')
+                        self.state.emit("视频中断，正在重连…")
             except Exception as error:
                 with self.lock:
                     if generation == self.generation and not self.stop_event.is_set():
                         self.log.emit(str(error))
-                        self.state.emit('视频连接失败，正在重试…')
+                        self.state.emit("视频连接失败，正在重试…")
             finally:
                 terminate(process)
                 if process:
-                    try: process.wait(timeout=3)
-                    except subprocess.TimeoutExpired: process.kill(); process.wait(timeout=3)
-                    if stderr: stderr.join(timeout=1)
-                    if watchdog: watchdog.join(timeout=1)
+                    try:
+                        process.wait(timeout=3)
+                    except subprocess.TimeoutExpired:
+                        process.kill()
+                        process.wait(timeout=3)
+                    if stderr:
+                        stderr.join(timeout=1)
+                    if watchdog:
+                        watchdog.join(timeout=1)
                     for pipe in (process.stdout, process.stderr):
-                        if pipe: pipe.close()
+                        if pipe:
+                            pipe.close()
                 with self.lock:
-                    if self.process is process: self.process = self.pid = None
+                    if self.process is process:
+                        self.process = self.pid = None
             self.stop_event.wait(0.5)
 
     def watchdog(self, process, generation, activity):
         while process.poll() is None and not self.stop_event.wait(0.25):
-            with self.lock: stale = generation != self.generation
+            with self.lock:
+                stale = generation != self.generation
             if stale or time.monotonic() - activity[0] > 4:
                 terminate(process)
                 return
@@ -155,8 +212,11 @@ class VideoWorker(QThread):
     def drain_log(self, process, generation):
         try:
             for line in process.stderr:
-                text = line.decode('utf-8', errors='replace').strip()
+                text = line.decode("utf-8", errors="replace").strip()
                 with self.lock:
-                    if generation != self.generation or self.stop_event.is_set(): return
-                    if text: self.log.emit(text[:1000])
-        except (ValueError, OSError): pass
+                    if generation != self.generation or self.stop_event.is_set():
+                        return
+                    if text:
+                        self.log.emit(text[:1000])
+        except (ValueError, OSError):
+            pass
