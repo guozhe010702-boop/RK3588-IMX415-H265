@@ -5,23 +5,11 @@ Build dependency: markdown-it-py (already available in this workspace).
 from html import escape
 from pathlib import Path
 from markdown_it import MarkdownIt
+import sys
 
 ROOT = Path(__file__).resolve().parents[1]
-source = next((ROOT / "docs").glob("*.md"))
+sources = [Path(sys.argv[1]).resolve()] if len(sys.argv)>1 else sorted((ROOT / "docs").glob("*.md"))
 parser = MarkdownIt("commonmark", {"html": False}).enable("table")
-tokens = parser.parse(source.read_text(encoding="utf-8"))
-toc = []
-heading_count = 0
-for i, token in enumerate(tokens):
-    if token.type == "heading_open":
-        heading_count += 1
-        anchor = "section-" + str(heading_count)
-        token.attrSet("id", anchor)
-        if token.tag == "h2":
-            toc.append((anchor, tokens[i + 1].content))
-
-article = parser.renderer.render(tokens, parser.options, {})
-links = "".join(f'<a href="#{anchor}">{escape(title)}</a>' for anchor, title in toc)
 page = '''<!doctype html>
 <html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>路线二 · MPP C API 操作与修改指南</title>
@@ -35,6 +23,18 @@ main{min-width:0;background:white;border:1px solid var(--line);border-radius:12p
 @media(max-width:900px){.layout{display:block;margin:16px auto;padding:0 14px}nav{position:static;margin-bottom:16px}main{padding:22px 18px}h1{font-size:24px}}@media print{header,nav{display:none}.layout{display:block;max-width:none;padding:0;margin:0}main{border:0;padding:0}pre{white-space:pre-wrap;background:#eee;color:black}h2{break-after:avoid}table{display:table}a{color:inherit}}
 </style></head><body><header><a href="../EVM3588-B_音视频实时压缩方案.html">← 返回方案网页</a><p>IMX415 · con7 · H.265 · 每条命令均标明电脑或板端，并解释作用。源码以项目根目录 board/ 为准。</p></header>
 <div class="layout"><nav><strong>操作与学习目录</strong>TOC</nav><main>ARTICLE</main></div></body></html>'''
-output = source.with_suffix(".html")
-output.write_text(page.replace("TOC", links).replace("ARTICLE", article), encoding="utf-8")
-print("Generated standalone HTML guide")
+def generate(source):
+    tokens=parser.parse(source.read_text(encoding='utf-8'))
+    toc=[]; headings=0; title='EVM3588 操作指南'
+    for index,token in enumerate(tokens):
+        if token.type=='heading_open':
+            headings+=1; anchor='section-'+str(headings); token.attrSet('id',anchor)
+            if token.tag=='h1': title=tokens[index+1].content
+            if token.tag=='h2': toc.append((anchor,tokens[index+1].content))
+    article=parser.renderer.render(tokens,parser.options,{})
+    links=''.join(f'<a href="#{anchor}">{escape(text)}</a>' for anchor,text in toc)
+    content=page.replace('路线二 · MPP C API 操作与修改指南',escape(title)).replace('TOC',links).replace('ARTICLE',article)
+    content=content.replace('IMX415 · con7 · H.265 · 每条命令均标明电脑或板端，并解释作用。源码以项目根目录 board/ 为准。','EVM3588-B · IMX415/con7 · FFmpeg / MPP · 操作与设计文档')
+    source.with_suffix('.html').write_text(content,encoding='utf-8')
+for source in sources: generate(source)
+print(f'Generated {len(sources)} standalone HTML guides')

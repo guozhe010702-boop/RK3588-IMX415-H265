@@ -1,0 +1,32 @@
+# This service distributes one encoder's stream; it never opens the camera.
+logLevel: info
+rtsp: true
+rtspAddress: :8554
+rtspTransports: [tcp]
+rtmp: false
+hls: false
+webrtc: false
+srt: false
+moq: false
+api: true
+apiAddress: 127.0.0.1:9997
+authMethod: internal
+authInternalUsers:
+  - user: any
+    pass:
+    ips: [127.0.0.1, "::1"]
+    permissions:
+      - action: publish
+        path: imx415
+      - action: api
+  - user: any
+    pass:
+    ips: []
+    permissions:
+      - action: read
+        path: imx415
+paths:
+  imx415:
+    source: publisher
+    overridePublisher: false
+    record: false

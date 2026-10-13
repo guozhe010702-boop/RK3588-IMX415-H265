@@ -1,5 +1,5 @@
 ﻿# Deploy project scripts to EVM3588-B from Windows PowerShell.
-# Does not stop a running GStreamer pipeline. BuildExamples is optional.
+# Uploads source only; preserves the running pipeline. BuildExamples is optional.
 param(
     [string]$AdbPath,
     [switch]$BuildExamples
@@ -51,6 +51,28 @@ if (Test-Path -LiteralPath $sourceDir) {
         if ($LASTEXITCODE -ne 0) { throw "推送 C 源码失败：$($source.Name)" }
     }
 }
+$pipelineDir = Join-Path $boardDir 'ffmpeg_pipeline'
+if (Test-Path -LiteralPath $pipelineDir) {
+    $pipelineDir = (Resolve-Path -LiteralPath $pipelineDir).Path
+    & $AdbPath -s $serial shell "mkdir -p $destination/ffmpeg_pipeline"
+    if ($LASTEXITCODE -ne 0) { throw '创建 FFmpeg 目录失败。' }
+    $pipelineFiles = @(Get-ChildItem -LiteralPath $pipelineDir -Recurse -File | Where-Object {
+        $_.Extension -in @('.py','.sh','.json','.yml','.patch','.h','.c') -and $_.Name -ne 'config.json'
+    })
+    foreach ($source in $pipelineFiles) {
+        $relative = $source.FullName.Substring($pipelineDir.Length + 1).Replace('\','/')
+        if ($relative -match '^(runtime|build|state|logs|recordings|snapshots)/') { continue }
+        if ($relative -notmatch '^[A-Za-z0-9_./-]+$') { throw "不支持的板端文件名：$relative" }
+        $slash = $relative.LastIndexOf('/')
+        if ($slash -ge 0) {
+            $remoteFolder = "$destination/ffmpeg_pipeline/" + $relative.Substring(0, $slash)
+            & $AdbPath -s $serial shell "mkdir -p $remoteFolder"
+            if ($LASTEXITCODE -ne 0) { throw "创建目录失败：$remoteFolder" }
+        }
+        & $AdbPath -s $serial push $source.FullName "$destination/ffmpeg_pipeline/$relative"
+        if ($LASTEXITCODE -ne 0) { throw "上传 FFmpeg 文件失败：$relative" }
+    }
+}
 & $AdbPath -s $serial shell "chmod +x $destination/*.sh"
 if ($LASTEXITCODE -ne 0) { throw '设置板端脚本权限失败。' }
 & $AdbPath -s $serial shell "test -f $destination/07_h265_preview_tcp.sh && ls -l $destination/07_h265_preview_tcp.sh"
@@ -62,6 +84,6 @@ if ($BuildExamples) {
 }
 
 Write-Host "部署完成：$($scripts.Count) 个脚本已上传至 $destination；当前视频进程未被脚本停止。"
-Write-Host '板端只读检查：cd /userdata/av_dev && bash 07_h265_preview_tcp.sh --check'
-Write-Host '需要切换到新脚本时，先在原管线的终端按 Ctrl+C，再运行：'
-Write-Host '  DISPLAY=:0 bash /userdata/av_dev/07_h265_preview_tcp.sh'
+Write-Host '板端 FFmpeg 只读检查：python3 /userdata/av_dev/ffmpeg_pipeline/avctl.py check'
+Write-Host 'check 查询运行环境和硬件编码能力；上传不会自动构建 FFmpeg 或切换当前管线。'
+Write-Host '第一次构建、启动、录像与恢复原方案的每条命令解释见 docs/FFmpeg_全链路操作指南.html。'

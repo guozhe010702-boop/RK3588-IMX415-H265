@@ -6,4 +6,8 @@
 *.md text eol=lf
 *.html text eol=lf
 *.js text eol=lf
+*.py text eol=lf
+*.json text eol=lf
+*.yml text eol=lf
+*.patch text eol=lf whitespace=-blank-at-eol
 *.ps1 text eol=crlf

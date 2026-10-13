@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>路线二 · MPP C API 操作与修改指南</title>
+<title>路线二：IMX415 → V4L2 → MPP C API → H.265</title>
 <style>
 :root{color-scheme:light;--ink:#183246;--sub:#50677a;--line:#d9e4eb;--blue:#086d95}
 *{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;font:16px/1.85 system-ui,"Microsoft YaHei",sans-serif;color:var(--ink);background:#f2f6f9}
@@ -9,11 +9,11 @@ header{background:#15364a;color:white;padding:28px max(24px,calc((100vw - 1320px
 nav{align-self:start;position:sticky;top:20px;background:white;border:1px solid var(--line);border-radius:12px;padding:20px}nav strong{display:block;margin-bottom:10px}nav a{display:block;font-size:14px;margin:10px 0;line-height:1.6}
 main{min-width:0;background:white;border:1px solid var(--line);border-radius:12px;padding:32px 40px}h1{font-size:28px;line-height:1.4;margin-top:0}h2{font-size:23px;border-top:1px solid var(--line);padding-top:28px;margin-top:40px;scroll-margin-top:18px}h3{font-size:19px;scroll-margin-top:18px}p{margin:12px 0}a{color:var(--blue)}code{font:14px/1.6 Consolas,monospace;background:#eef4f7;border-radius:4px;padding:2px 5px;overflow-wrap:anywhere}pre{padding:18px 20px;border-radius:9px;background:#15364a;color:#e8f6ff;overflow-x:auto;line-height:1.65;white-space:pre}pre code{background:transparent;padding:0;color:inherit;overflow-wrap:normal}table{display:block;overflow-x:auto;width:100%;border-collapse:collapse;margin:18px 0;font-size:14px}th,td{border:1px solid var(--line);padding:10px 12px;vertical-align:top;min-width:110px}th{background:#edf5f8}li{margin:6px 0}strong{color:#0d5270}
 @media(max-width:900px){.layout{display:block;margin:16px auto;padding:0 14px}nav{position:static;margin-bottom:16px}main{padding:22px 18px}h1{font-size:24px}}@media print{header,nav{display:none}.layout{display:block;max-width:none;padding:0;margin:0}main{border:0;padding:0}pre{white-space:pre-wrap;background:#eee;color:black}h2{break-after:avoid}table{display:table}a{color:inherit}}
-</style></head><body><header><a href="../EVM3588-B_音视频实时压缩方案.html">← 返回方案网页</a><p>IMX415 · con7 · H.265 · 每条命令均标明电脑或板端，并解释作用。源码以项目根目录 board/ 为准。</p></header>
+</style></head><body><header><a href="../EVM3588-B_音视频实时压缩方案.html">← 返回方案网页</a><p>EVM3588-B · IMX415/con7 · FFmpeg / MPP · 操作与设计文档</p></header>
 <div class="layout"><nav><strong>操作与学习目录</strong><a href="#section-2">1. 先理解现在运行的是什么</a><a href="#section-3">2. 文件怎么对应</a><a href="#section-4">3. 电脑与板端终端一定要分清</a><a href="#section-7">4. 第一轮：文件编码，保持两端实时画面</a><a href="#section-8">5. 第二轮：暂停预览，测试 IMX415，再恢复</a><a href="#section-13">6. 把 C 程序的每一层讲清楚</a><a href="#section-19">7. 之前具体改了什么</a><a href="#section-20">8. 你如何改动，先从参数实验开始</a><a href="#section-24">9. 下一步按什么顺序开发</a><a href="#section-25">10. 常见失败怎么定位</a><a href="#section-26">11. 备份与 Git 文件范围</a></nav><main><h1 id="section-1">路线二：IMX415 → V4L2 → MPP C API → H.265</h1>
 <p>本文对应当前 EVM3588-B：IMX415 接 con7，采集节点 <code>/dev/video44</code>，电脑与板子通过局域网通信，板子连接 HDMI 显示器。板子此前的 IP 是 <code>192.168.2.221</code>，实际地址以板端查询为准。</p>
 <h2 id="section-2">1. 先理解现在运行的是什么</h2>
-<p>目前持续运行的 HDMI 画面与电脑 ffplay 来自 <strong>07 GStreamer 脚本</strong>。路线二的 C 程序已经部署并测试，但它是按指定帧数录制 H.265 文件的学习程序，录完自动退出。</p>
+<p>2026-10-13 已切换到 <strong>FFmpeg + RK3588 VPU + MediaMTX RTSP</strong>，HDMI 与电脑读取同一直播流。操作见 <a href="FFmpeg_%E5%85%A8%E9%93%BE%E8%B7%AF%E6%93%8D%E4%BD%9C%E6%8C%87%E5%8D%97.md">FFmpeg 全链路指南</a>。原 07 GStreamer/TCP 5000 脚本保留为备用。路线二的 C 程序已经部署并测试，但它是按指定帧数录制 H.265 文件的学习程序，录完自动退出。</p>
 <table>
 <thead>
 <tr>
@@ -40,7 +40,7 @@ main{min-width:0;background:white;border:1px solid var(--line);border-radius:12p
 </tr>
 </tbody>
 </table>
-<p><strong>摄像头 C 程序和 07 不能同时采集 <code>/dev/video44</code>。</strong> 先做不占摄像头的文件测试，准备好后暂停 07，完成摄像头测试，再恢复 07。编译、阅读源码和文件测试都不需要停当前画面。</p>
+<p><strong>摄像头 C 程序与 FFmpeg 或 07 不能同时采集 <code>/dev/video44</code>。</strong> 先做不占摄像头的文件测试，准备好后暂停当前直播，完成摄像头测试，再恢复直播。编译、阅读源码和文件测试都不需要停当前画面。</p>
 <p>2026-10-12 已验证：两个程序在板端编译成功；离线测试生成完整 30 帧 640×360 HEVC；IMX415 生成完整 60 帧 1920×1080 HEVC，耗时约 1.96 秒。<code>ffprobe -count_frames</code> 验证了帧数。短测试不等于长时间稳定性验证。</p>
 <h2 id="section-3">2. 文件怎么对应</h2>
 <p>电脑端以项目根目录的 <code>board/v4l2_mpp_enc/</code> 为源码入口；<code>音视频代码包/</code> 是交付副本，应与根目录同步。部署脚本把 C 源码传到板端独立目录 <code>/userdata/av_dev/mpp_route2/</code>。</p>
@@ -132,32 +132,14 @@ main{min-width:0;background:white;border:1px solid var(--line);border-radius:12p
 </code></pre>
 <p>解释：<code>ffprobe</code> 检查输出；<code>-v error</code> 仅打印错误；<code>-f hevc</code> 指定裸 H.265 格式；<code>-count_frames</code> 实际读取/解码统计；<code>-show_entries</code> 只保留所需字段；<code>-of</code> 设置简洁显示。预期 <code>codec_name=hevc</code>、<code>width=640</code>、<code>height=360</code>、<code>nb_read_frames=30</code>。若只检查文件非空，无法发现丢帧或不能解码。</p>
 <h2 id="section-8">5. 第二轮：暂停预览，测试 IMX415，再恢复</h2>
-<h3 id="section-9">5.1 板端确认并暂停 07</h3>
-<pre><code class="language-bash">ss -lntp 'sport = :5000'
+<h3 id="section-9">5.1 板端暂停当前 FFmpeg 直播</h3>
+<p>开发板 Bash：</p>
+<pre><code class="language-bash">python3 /userdata/av_dev/ffmpeg_pipeline/avctl.py stop
 </code></pre>
-<p>解释：<code>ss</code> 查看 TCP 套接字；<code>-l</code> 只看监听；<code>-n</code> 显示数字地址；<code>-t</code> 选 TCP；<code>-p</code> 显示进程；过滤条件限定本地 5000 端口。记录输出中的进程，并确认它是当前预览/推流管线。</p>
-<p>如果 07 在你面前的原终端前台运行，在那个终端按 <code>Ctrl+C</code>。本次接管实例在后台运行，需要通过 PID 停止；在板端执行下面两步获取并核对，不能照抄旧日志里的 PID：</p>
-<pre><code class="language-bash">stream_pid=$(ss -H -lntp 'sport = :5000' | sed -n 's/.*pid=\([0-9][0-9]*\).*/\1/p' | sort -u)
-</code></pre>
-<p>解释：<code>-H</code> 去掉表头；<code>sed</code> 提取监听进程 PID；<code>sort -u</code> 去重；<code>$(...)</code> 把结果保存到 Bash 变量 <code>stream_pid</code>。这条命令只读取状态。</p>
-<pre><code class="language-bash">if [[ &quot;$stream_pid&quot; =~ ^[0-9]+$ ]]; then
-  ps -ww -p &quot;$stream_pid&quot; -o args=
-else
-  echo '没有找到唯一监听进程，请重新检查，暂不停止任何进程。'
-fi
-</code></pre>
-<p>解释：先检查 PID 是单个数字，随后 <code>ps -p</code> 查看该进程；<code>-ww</code> 避免截断参数；<code>-o args=</code> 显示完整启动命令。确认其中包含当前 <code>/dev/video44</code>、<code>mpph265enc</code> 和 TCP 5000 后，才执行下面停止命令。</p>
-<pre><code class="language-bash">if [[ &quot;$stream_pid&quot; =~ ^[0-9]+$ ]]; then
-  kill -TERM &quot;$stream_pid&quot;
-fi
-</code></pre>
-<p>解释：只向刚核对的单个 PID 发送结束信号。这里会短暂停止 HDMI 与电脑画面；不要改成 <code>pkill gst-launch</code>，也不要对未确认的进程执行。保持在同一个板端 shell 中操作，变量才仍存在。</p>
+<p>解释：<code>python3</code> 执行统一入口，<code>stop</code> 先正常结束录像，再停止本服务的 HDMI 播放和 FFmpeg 采集，释放摄像头。不会终止其它应用。此时两端画面短暂中断。</p>
 <pre><code class="language-bash">lsof /dev/video44
 </code></pre>
-<p>解释：确认摄像头已经释放；应没有列出的占用进程。<code>gvfs</code> 的路径警告与这个设备节点的占用不是一回事；关注是否还有进程行。若未释放，先检查原进程是否仍在退出。</p>
-<pre><code class="language-bash">ss -lntp 'sport = :5000'
-</code></pre>
-<p>解释：再次确认 5000 已没有监听进程。摄像头与端口释放后再继续。</p>
+<p>解释：<code>lsof</code> 检查摄像头仍被哪些进程打开。没有进程行时再运行 C 程序；如果有无关应用占用，先核对其身份。不要直接批量杀进程。旧 07 的停止方法见 FFmpeg 指南中的恢复说明。</p>
 <h3 id="section-10">5.2 板端运行摄像头 C 程序</h3>
 <pre><code class="language-bash">./v4l2_mpp_enc -d /dev/video44 -o learn_imx415.h265 \
   -c h265 -w 1920 -h 1080 -b 4000000 -f 30 -n 60
@@ -168,16 +150,20 @@ fi
   -of default=noprint_wrappers=1 learn_imx415.h265
 </code></pre>
 <p>解释：与文件测试相同，检查摄像头输出是否为完整的 60 帧 HEVC 和实际尺寸。码流只有视频，没有音频，也没有 MP4 容器。</p>
-<h3 id="section-11">5.3 板端恢复 HDMI/TCP，电脑重连</h3>
-<pre><code class="language-bash">DISPLAY=:0 bash /userdata/av_dev/07_h265_preview_tcp.sh
+<h3 id="section-11">5.3 板端恢复 FFmpeg / HDMI，电脑重连 RTSP</h3>
+<p>开发板 Bash：</p>
+<pre><code class="language-bash">python3 /userdata/av_dev/ffmpeg_pipeline/avctl.py start
 </code></pre>
-<p>解释：在板端运行；<code>DISPLAY=:0</code> 为这次启动选择已有的图形显示会话，<code>bash</code> 执行 07。它保持前台运行，当前终端不要再启动第二条摄像头管线。若 C 程序失败，确认它已退出后，同样执行此步骤恢复。</p>
-<p>在电脑 <strong>另开 PowerShell</strong>：</p>
-<pre><code class="language-powershell">ffplay -fflags nobuffer -flags low_delay -f hevc tcp://192.168.2.221:5000
+<p>解释：重新启动 FFmpeg 硬编直播；不带配置时沿用保存的参数。先确认摄像头 C 程序已经退出。</p>
+<pre><code class="language-bash">python3 /userdata/av_dev/ffmpeg_pipeline/avctl.py preview-start
 </code></pre>
-<p>解释：<code>ffplay</code> 显示网络视频；<code>-fflags nobuffer</code> 减少输入缓存；<code>-flags low_delay</code> 请求低延迟解码；<code>-f hevc</code> 指定裸 H.265；地址是板子 IP 与 TCP 端口。加入已经在运行的码流时可能需要等待携带参数集的关键帧；不能只凭 TCP 已连接就判定已经有视频。</p>
+<p>解释：启动板端 HDMI 播放器，它读取 RTSP，不再次采集摄像头。</p>
+<p>电脑 PowerShell：</p>
+<pre><code class="language-powershell">ffplay -rtsp_transport tcp -fflags nobuffer -flags low_delay rtsp://192.168.2.221:8554/imx415
+</code></pre>
+<p>解释：<code>ffplay</code> 播放直播；<code>-rtsp_transport tcp</code> 使用 TCP；<code>-fflags nobuffer</code> 与 <code>-flags low_delay</code> 减少缓存；URL 指向板端 8554 的 imx415 流。IP 变化时替换地址。</p>
 <h3 id="section-12">5.4 把 C 程序录制的文件拿回电脑看</h3>
-<p>恢复 07 后，在电脑另一个 PowerShell 中操作。如果这是新开的终端，先设置它自己的 ADB 变量：</p>
+<p>恢复直播后，在电脑另一个 PowerShell 中操作。如果这是新开的终端，先设置它自己的 ADB 变量：</p>
 <pre><code class="language-powershell">$adbPath = 'C:\Users\dvsense_docker\Desktop\work\RK3588\Tools\platform-tools\adb.exe'
 </code></pre>
 <p>解释：新终端不会继承你在另一个终端里手动赋的变量，这里重新保存 ADB 路径。</p>
@@ -294,7 +280,7 @@ fi
 <p>目前未实现：C 程序 HDMI 预览、C 程序 TCP/RTSP 推流、ROI、运行时动态码率、音视频同步、DMA-BUF 零拷贝以及自动重启服务。这些不影响已经验证的文件编码闭环。</p>
 <h2 id="section-20">8. 你如何改动，先从参数实验开始</h2>
 <h3 id="section-21">8.1 不改源码：比较 2 与 4 Mbit/s</h3>
-<p>在暂停 07 后，板端运行：</p>
+<p>在暂停当前直播后，板端运行：</p>
 <pre><code class="language-bash">./v4l2_mpp_enc -d /dev/video44 -o learn_2mbps.h265 -c h265 -w 1920 -h 1080 -b 2000000 -f 30 -n 300
 </code></pre>
 <p>解释：录制约 10 秒；所有选项同第 5 节，仅目标码率改为 2 Mbit/s，帧数改为 300。记录程序打印的实际耗时与总字节数。</p>
@@ -312,7 +298,7 @@ fi
 <p>解释：复制根目录修改后的 5 个源码/构建文件到交付副本；<code>-Force</code> 覆盖交付副本中的旧文件。Git 主要跟踪根目录源码，交付副本和 ZIP 是可再生成产物。</p>
 <pre><code class="language-powershell">powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\deploy.ps1 -BuildExamples
 </code></pre>
-<p>解释：重新上传源码并在板端增量编译；各选项含义同第 3 节。正在运行的 GStreamer 管线与这些 C 二进制无关，因此编译不会让当前两端画面切换成 C 程序。之后依次执行文件测试、短摄像头测试、恢复 07。</p>
+<p>解释：重新上传源码并在板端增量编译；各选项含义同第 3 节。正在运行的直播管线与这些 C 二进制无关，因此编译不会让当前两端画面切换成 C 程序。之后依次执行文件测试、短摄像头测试、恢复当前 FFmpeg 直播。</p>
 <p>需要同步整个交付副本并重新生成 ZIP 时，在电脑项目根目录运行：</p>
 <pre><code class="language-powershell">python .\tools\package_project.py
 </code></pre>
@@ -324,7 +310,7 @@ fi
 <li><strong>先做参数实验与更长验证</strong>：同场景比较 2/4 Mbit/s 与 GOP 30/60；检查输出尺寸、完整帧数、耗时、平均码率。保存日志，再做分钟级验证。当前 60 帧测试只证明短链路可用。</li>
 <li><strong>补足可维护性</strong>：采集时间戳、编码耗时统计、信号退出与资源清理、有限等待和超时恢复。避免进程卡住后摄像头一直被占用。</li>
 <li><strong>运行时动态码率</strong>：在共用编码器层增加更新函数，同时更新 <code>rc:bps_target/max/min</code>，再调用 <code>MPP_ENC_SET_CFG</code>。先在同步帧循环的帧边界应用，记录切换帧号；这与重启程序时改变 <code>-b</code> 是两种能力。</li>
-<li><strong>自研 TCP 推流与预览</strong>：把 <code>write_packet()</code> 抽成输出回调，支持文件和网络；处理 partial send、断开重连、客户端加入时的参数集/关键帧、慢客户端背压。HDMI 预览需要独立显示支路，不能让显示或网络卡住采集线程。完成前继续用已验证的 07 做实时显示。</li>
+<li><strong>自研 TCP 推流与预览</strong>：把 <code>write_packet()</code> 抽成输出回调，支持文件和网络；处理 partial send、断开重连、客户端加入时的参数集/关键帧、慢客户端背压。HDMI 预览需要独立显示支路，不能让显示或网络卡住采集线程。完成前继续用已验证的 FFmpeg 直播做实时显示。</li>
 <li><strong>零拷贝与 ROI</strong>：先核对 NV12M 两平面 DMA-BUF 导出的布局能否直接匹配 MPP；若不能需要重排/转换。ROI 按当前 MPP 版本的结构与元数据接口实现，不能把其它 SDK 的示例直接复制进来。</li>
 <li><strong>再评估路线三</strong>：目前板端 FFmpeg 没有 rkmpp 编码器，未发现 Rockit 开发组件；需要匹配的 SDK/工具链与部署验证，不应将 <code>libx265</code> 软件编码当作硬编。</li>
 </ol>
@@ -344,7 +330,7 @@ fi
 </tr>
 <tr>
 <td><code>Device or resource busy</code></td>
-<td>07 或其它进程尚占用摄像头，重新用 lsof 检查</td>
+<td>FFmpeg、07 或其它进程尚占用摄像头，重新用 lsof 检查</td>
 </tr>
 <tr>
 <td><code>Address already in use</code></td>

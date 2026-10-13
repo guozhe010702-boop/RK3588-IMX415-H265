@@ -13,7 +13,8 @@ files = [ROOT / name for name in (
 )]
 for directory in ("board", "docs", "tools"):
     files.extend(path for path in (ROOT / directory).rglob("*")
-                 if path.is_file() and (path.suffix in {".sh", ".c", ".h", ".md", ".html", ".py"}
+                 if path.is_file() and not any(part in {'runtime','build','state','logs','recordings','snapshots','__pycache__'} for part in path.relative_to(ROOT).parts)
+                 and path.name != 'config.json' and (path.suffix in {".sh", ".c", ".h", ".md", ".html", ".py", ".json", ".yml", ".patch"}
                                        or path.name == "Makefile"))
 
 entries = []

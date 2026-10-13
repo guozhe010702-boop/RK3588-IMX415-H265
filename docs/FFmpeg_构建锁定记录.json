@@ -1,0 +1,41 @@
+{
+  "ffmpeg": {
+    "url": "https://github.com/nyanmisaka/ffmpeg-rockchip.git",
+    "branch": "master",
+    "commit": "d90e3a1c18d7929383cf88c1b3da2e2d1c966cbf"
+  },
+  "mpp": {
+    "url": "https://gitee.com/nyanmisaka/mpp.git",
+    "branch": "jellyfin-mpp",
+    "commit": "a9380ef333102ac318628f83b5f7a460d377749e"
+  },
+  "rga": {
+    "url": "https://gitee.com/nyanmisaka/rga.git",
+    "branch": "jellyfin-rga",
+    "commit": "1d330cc28551943bed3380261a5a9c6fbd58ff53"
+  },
+  "mediamtx": {
+    "version": "v1.21.2",
+    "url": "https://github.com/bluenviron/mediamtx/releases/download/v1.21.2/mediamtx_v1.21.2_linux_arm64.tar.gz",
+    "sha256": "180a235374a548d9133cdd5e20f5dbd8b01317be1c86e0d7e66df585dc42ed6f"
+  },
+  "builtAt": "2026-10-13T09:41:30.954417+08:00",
+  "sha256": {
+    "runtime/bin/ffmpeg": "a899d23d798ada4c2d4a443282737e66bebbdb2475e396bdacaecd6a74582867",
+    "runtime/bin/ffprobe": "f1b4c127dd6b78e27fba84a5e3769229aac73d0bb18141fbfc122b355365b842",
+    "runtime/bin/mediamtx": "f8676d0ed8f210453a722fdad76fe6e52cf764fdcf9930e8c7d242d02da57c2b",
+    "patches/0001-nv12m-capture.patch": "9767fe591c5e46992b39a5ae1d8064614d7d14d01d203e21662a0abe7bfd26f4"
+  },
+  "configure": [
+    "# ./configure --prefix=/userdata/av_dev/ffmpeg_pipeline/runtime --disable-autodetect --disable-doc --disable-debug --disable-ffplay --enable-version3 --enable-libdrm --enable-rkmpp --enable-rkrga --extra-cflags=-I/userdata/av_dev/ffmpeg_pipeline/runtime/include --extra-ldflags='-L/userdata/av_dev/ffmpeg_pipeline/runtime/lib -Wl,-rpath,/userdata/av_dev/ffmpeg_pipeline/runtime/lib'",
+    "ALL_COMPONENTS='",
+    "    ",
+    "    aac_adtstoasc_bsf",
+    "ahx_to_mp2_bsf",
+    "apv_metadata_bsf",
+    "av1_frame_merge_bsf",
+    "av1_frame_split_bsf",
+    "av1_metadata_bsf",
+    "chomp_bsf"
+  ]
+}

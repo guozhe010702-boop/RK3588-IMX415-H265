@@ -1,0 +1,270 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>FFmpeg + RK3588 VPU：H.265 / RTSP / MP4 全链路操作指南</title>
+<style>
+:root{color-scheme:light;--ink:#183246;--sub:#50677a;--line:#d9e4eb;--blue:#086d95}
+*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;font:16px/1.85 system-ui,"Microsoft YaHei",sans-serif;color:var(--ink);background:#f2f6f9}
+header{background:#15364a;color:white;padding:28px max(24px,calc((100vw - 1320px)/2));}header a{color:#a7e5ff}header p{margin:8px 0 0;font-size:14px}
+.layout{display:grid;grid-template-columns:250px minmax(0,1fr);gap:28px;max-width:1320px;margin:28px auto;padding:0 24px}
+nav{align-self:start;position:sticky;top:20px;background:white;border:1px solid var(--line);border-radius:12px;padding:20px}nav strong{display:block;margin-bottom:10px}nav a{display:block;font-size:14px;margin:10px 0;line-height:1.6}
+main{min-width:0;background:white;border:1px solid var(--line);border-radius:12px;padding:32px 40px}h1{font-size:28px;line-height:1.4;margin-top:0}h2{font-size:23px;border-top:1px solid var(--line);padding-top:28px;margin-top:40px;scroll-margin-top:18px}h3{font-size:19px;scroll-margin-top:18px}p{margin:12px 0}a{color:var(--blue)}code{font:14px/1.6 Consolas,monospace;background:#eef4f7;border-radius:4px;padding:2px 5px;overflow-wrap:anywhere}pre{padding:18px 20px;border-radius:9px;background:#15364a;color:#e8f6ff;overflow-x:auto;line-height:1.65;white-space:pre}pre code{background:transparent;padding:0;color:inherit;overflow-wrap:normal}table{display:block;overflow-x:auto;width:100%;border-collapse:collapse;margin:18px 0;font-size:14px}th,td{border:1px solid var(--line);padding:10px 12px;vertical-align:top;min-width:110px}th{background:#edf5f8}li{margin:6px 0}strong{color:#0d5270}
+@media(max-width:900px){.layout{display:block;margin:16px auto;padding:0 14px}nav{position:static;margin-bottom:16px}main{padding:22px 18px}h1{font-size:24px}}@media print{header,nav{display:none}.layout{display:block;max-width:none;padding:0;margin:0}main{border:0;padding:0}pre{white-space:pre-wrap;background:#eee;color:black}h2{break-after:avoid}table{display:table}a{color:inherit}}
+</style></head><body><header><a href="../EVM3588-B_音视频实时压缩方案.html">← 返回方案网页</a><p>EVM3588-B · IMX415/con7 · FFmpeg / MPP · 操作与设计文档</p></header>
+<div class="layout"><nav><strong>操作与学习目录</strong><a href="#section-2">1. 现在各组件做什么</a><a href="#section-3">2. 电脑部署与板端构建</a><a href="#section-4">3. 启动直播与两端实时播放</a><a href="#section-5">4. 手动 MP4 录像</a><a href="#section-6">5. 截图与录像下载</a><a href="#section-7">6. 修改编码配置</a><a href="#section-8">7. 状态、日志和停止</a><a href="#section-9">8. 源码与兼容补丁为什么必要</a><a href="#section-10">9. 验收工具与证据</a><a href="#section-11">10. 常见问题与恢复</a><a href="#section-12">11. 版本、备份与后续开发</a></nav><main><h1 id="section-1">FFmpeg + RK3588 VPU：H.265 / RTSP / MP4 全链路操作指南</h1>
+<p>本指南对应 EVM3588-B、IMX415/con7、Ubuntu 20.04、厂商 5.10.110 内核。摄像头 <code>/dev/video44</code> 输出双平面 NV12M；默认 1920×1080、30 fps、H.265 CBR 2.5 Mbit/s、GOP 30，无音频。</p>
+<h2 id="section-2">1. 现在各组件做什么</h2>
+<pre><code class="language-text">IMX415 → CSI / ISP → NV12M → 独立 FFmpeg → RK3588 VPU H.265
+                                                    ↓
+                                             MediaMTX RTSP
+                                            ↙      ↓       ↘
+                                       HDMI播放  电脑播放  手动MP4录像
+</code></pre>
+<p>只有独立 FFmpeg 打开摄像头并编码一次。MediaMTX 负责发布/分发，HDMI 和电脑播放器读取同一条码流。录像进程也是订阅者，它用流复制把已经编码的 H.265 封装成 MP4；不是第二次编码。</p>
+<table>
+<thead>
+<tr>
+<th>位置</th>
+<th>作用</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>/usr/bin/ffmpeg</code></td>
+<td>原系统版本保留，它没有 <code>hevc_rkmpp</code> 编码器</td>
+</tr>
+<tr>
+<td><code>/userdata/av_dev/ffmpeg_pipeline/runtime/bin/ffmpeg</code></td>
+<td>新版 FFmpeg，包含 <code>hevc_rkmpp</code> 与 <code>h264_rkmpp</code></td>
+</tr>
+<tr>
+<td><code>runtime/lib/</code></td>
+<td>新版 MPP/RGA 私有库，只对新 FFmpeg 进程生效</td>
+</tr>
+<tr>
+<td><code>avctl.py</code></td>
+<td>JSON 控制接口，供命令行及后续 SSH 上位机共用</td>
+</tr>
+<tr>
+<td><code>evm-mediamtx.service</code></td>
+<td>RTSP 服务：8554；管理 API：仅本机 9997</td>
+</tr>
+<tr>
+<td><code>evm-ffmpeg-control.service</code></td>
+<td>管理编码、录像、截图与 HDMI 播放器</td>
+</tr>
+</tbody>
+</table>
+<p>原 GStreamer 07 脚本和路线二 C 程序仍保留。它们与新链路不能同时打开 <code>/dev/video44</code>。默认不自动录像，也没有启用开机自启动。</p>
+<h2 id="section-3">2. 电脑部署与板端构建</h2>
+<p>电脑终端提示符是 <code>PS C:\...&gt;</code>；开发板是 <code>root@ema:...#</code>。Windows 路径和 PowerShell 参数不能输入板端 Bash。</p>
+<p>电脑 PowerShell：</p>
+<pre><code class="language-powershell">Set-Location -LiteralPath 'C:\Users\dvsense_docker\Desktop\work\RK3588\av_dev'
+</code></pre>
+<p>解释：进入电脑上的项目根目录；<code>-LiteralPath</code> 按原样处理含中文的路径。其它电脑替换成实际项目目录。</p>
+<pre><code class="language-powershell">powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\deploy.ps1
+</code></pre>
+<p>解释：<code>powershell.exe</code> 启动子进程，<code>-NoProfile</code> 不加载个人配置，<code>-ExecutionPolicy Bypass</code> 对这次运行放行脚本，<code>-File</code> 指定部署入口。它上传源码、配置示例、补丁和测试工具，不上传本机缓存或录像，也不自动停止直播、修改板端现有配置或编译 FFmpeg。<code>-BuildExamples</code> 仍只编译路线二两个 C 程序。</p>
+<pre><code class="language-powershell">$adbPath = 'C:\Users\dvsense_docker\Desktop\work\RK3588\Tools\platform-tools\adb.exe'
+</code></pre>
+<p>解释：在当前电脑终端保存 ADB 路径；新开终端需要重新赋值。</p>
+<pre><code class="language-powershell">&amp; $adbPath shell
+</code></pre>
+<p>解释：<code>&amp;</code> 执行 ADB，<code>shell</code> 进入板端 Bash。接下来构建与控制命令均在板端运行。</p>
+<pre><code class="language-bash">cd /userdata/av_dev/ffmpeg_pipeline
+</code></pre>
+<p>解释：进入独立运行环境所在目录。</p>
+<p><strong>当前这块板子已完成构建与安装，正常使用可直接跳到第 3 节。</strong> 新板第一次安装，或按固定源码重建时才需要：</p>
+<pre><code class="language-bash">bash build_runtime.sh --install-build-deps
+</code></pre>
+<p>解释：<code>bash</code> 执行原生 ARM64 构建脚本；<code>--install-build-deps</code> 安装缺少的开发工具/头文件，使用 <code>--no-upgrade</code> 保留已安装运行库。随后检出 <code>versions.json</code> 中固定的源码提交、应用 NV12M 补丁、以最多 4 个并行任务构建 MPP/RGA/FFmpeg、下载并校验固定版本 MediaMTX。组件安装在独立 <code>runtime/</code>，不覆盖系统 FFmpeg 或厂商 MPP/RGA。构建需要网络和一定时间，日志应保留；已经运行的构建会由锁拒绝重复启动。</p>
+<pre><code class="language-bash">bash install_services.sh
+</code></pre>
+<p>解释：安装两个 systemd 服务文件、创建数据目录，并在配置不存在时复制配置示例；不会自动启用开机自启动。换安装目录后要重新运行此步骤，因为服务文件中记录了实际绝对路径。</p>
+<pre><code class="language-bash">python3 avctl.py check
+</code></pre>
+<p>解释：检查独立 FFmpeg、可用硬编器、VPU 节点、摄像头节点与剩余磁盘空间。<code>runtimeBuilt=true</code> 与编码器列表只是环境依据，还应实际编码验证。<code>check</code> 不打开摄像头、不启动服务、不改变图像参数。</p>
+<h2 id="section-4">3. 启动直播与两端实时播放</h2>
+<p>板端 Bash：</p>
+<pre><code class="language-bash">python3 avctl.py start
+</code></pre>
+<p>解释：启动必要服务，并按已保存配置让 FFmpeg 直接采集 NV12M，用 <code>hevc_rkmpp</code> 调用 VPU 硬编、发布到本机 MediaMTX。缺少硬编器时直接失败，不改用 <code>libx265</code>。如果摄像头被其他进程占用，返回具体 PID，不自动终止它们。</p>
+<pre><code class="language-bash">python3 avctl.py preview-start
+</code></pre>
+<p>解释：在开发板已有 X11/HDMI 图形会话中启动系统 ffplay，读取 RTSP。它不再打开摄像头；截图、录像或更多电脑客户端可以同时订阅。当前 VPU 编码是硬件路径，播放器解码采用现有播放器能力。</p>
+<p>电脑另一个 PowerShell：</p>
+<pre><code class="language-powershell">ffplay -rtsp_transport tcp -fflags nobuffer -flags low_delay -framedrop rtsp://192.168.2.221:8554/imx415
+</code></pre>
+<p>解释：<code>ffplay</code> 播放视频，<code>-rtsp_transport tcp</code> 使用 TCP，<code>-fflags nobuffer</code> 减少输入缓存，<code>-flags low_delay</code> 请求低延迟解码，<code>-framedrop</code> 在显示跟不上时丢显示帧。地址为板端 IP、8554 端口和 <code>/imx415</code> 路径。不要加 <code>-f hevc</code>：RTSP 已提供媒体描述，和旧 TCP 裸码流不同。</p>
+<p>加入正在运行的 H.265 流时，首个关键帧之前可能出现参考帧提示；通常等下一个 GOP 即可出画面。若提示一直持续或画面停住，应查询状态和日志。独立 ffplay 不提供完整的自动重连管理，服务中断后必要时重开；后续上位机会管理播放器重启。</p>
+<pre><code class="language-bash">hostname -I
+</code></pre>
+<p>解释：在板端查询当前地址；DHCP 变化后，用电脑能到达的 IPv4 替换播放地址。当前示例仅用于局域网。</p>
+<h2 id="section-5">4. 手动 MP4 录像</h2>
+<p>直播已运行时，在板端执行：</p>
+<pre><code class="language-bash">python3 avctl.py record-start
+</code></pre>
+<p>解释：创建唯一文件名，启动第二个 FFmpeg 订阅 RTSP，并用 <code>-c:v copy</code> 复制已编码视频、封装 MP4。源编码器不会重新启动。录像位于 <code>recordings/</code>，录制中文件名含 <code>.partial.mp4</code>，不应把它当作已完成文件。</p>
+<pre><code class="language-bash">python3 avctl.py record-stop
+</code></pre>
+<p>解释：发送正常结束信号，等待写入 MP4 索引并用 ffprobe 核对；成功后改为最终 <code>.mp4</code> 文件名并返回路径、大小、尺寸和时长。操作同时会报告异常；未正确完成的文件保留为 partial，不会伪装为成功录像。</p>
+<pre><code class="language-bash">python3 avctl.py status
+</code></pre>
+<p>解释：返回 JSON 状态。<code>recording=false</code> 表示录像已停止；<code>lastRecording</code> 保存最后一次完成文件的信息，<code>capturePid</code> 不应因为录像启停改变。停止直播也会先结束录像。磁盘不足 1 GiB 时控制器停止录像并保留直播，不自动删除历史文件。</p>
+<p>断电或强制杀死正在录制的进程，普通 MP4 可能来不及写完索引；partial 文件会留作排查。本轮采用手动单文件录像，连续分段与断电恢复属于后续扩展。</p>
+<h2 id="section-6">5. 截图与录像下载</h2>
+<p>板端：</p>
+<pre><code class="language-bash">python3 avctl.py snapshot
+</code></pre>
+<p>解释：从同一条 RTSP 解码一帧并生成 JPEG，返回 <code>snapshots/</code> 下的唯一文件路径；不再打开摄像头，也不重启直播。JPEG 编码是截图处理，不是视频软件编码回退。</p>
+<p>电脑 PowerShell，在项目根目录准备保存目录：</p>
+<pre><code class="language-powershell">New-Item -ItemType Directory -Path .\recordings -Force
+</code></pre>
+<p>解释：创建本机录像目录；<code>-Force</code> 允许目录已存在，不删除原有内容。</p>
+<p>下面是本次实测生成的录像路径。以后把源路径换成 <code>record-stop</code> 返回的新路径：</p>
+<pre><code class="language-powershell">&amp; $adbPath pull /userdata/av_dev/ffmpeg_pipeline/recordings/imx415-20261013-094626-a75f35.mp4 .\recordings\
+</code></pre>
+<p>解释：<code>adb pull</code> 从板子复制到电脑，两个参数分别是板端文件和电脑目录。新开终端时先按第 2 节重新设置 <code>$adbPath</code>。传输不会占用摄像头；后续上位机将通过 SFTP 下载。</p>
+<pre><code class="language-powershell">ffplay .\recordings\imx415-20261013-094626-a75f35.mp4
+</code></pre>
+<p>解释：打开已完成的本地 MP4，自动读取容器和编码信息。这是文件回放，与 RTSP 直播不同。</p>
+<h2 id="section-7">6. 修改编码配置</h2>
+<p>配置字段如下；编码格式对应明确的硬件编码器。</p>
+<table>
+<thead>
+<tr>
+<th>字段</th>
+<th>默认值</th>
+<th>含义</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>device</code></td>
+<td><code>/dev/video44</code></td>
+<td>当前 IMX415 的采集节点</td>
+</tr>
+<tr>
+<td><code>codec</code></td>
+<td><code>h265</code></td>
+<td><code>h265 → hevc_rkmpp</code>，<code>h264 → h264_rkmpp</code></td>
+</tr>
+<tr>
+<td><code>width / height</code></td>
+<td><code>1920 / 1080</code></td>
+<td>请求的有效宽高，必须为偶数</td>
+</tr>
+<tr>
+<td><code>fps</code></td>
+<td><code>30</code></td>
+<td>输出帧率配置；不保证驱动改变传感器物理帧率</td>
+</tr>
+<tr>
+<td><code>bitrate</code></td>
+<td><code>2500000</code></td>
+<td>目标 bit/s，即 2.5 Mbit/s</td>
+</tr>
+<tr>
+<td><code>gop</code></td>
+<td><code>30</code></td>
+<td>GOP 帧数，30 fps 下约一秒</td>
+</tr>
+</tbody>
+</table>
+<p>输入范围检查不代表硬件支持所有尺寸/帧率；以实际编码、驱动日志和输出为准。范围为宽 96～8192、高 64～8192、fps 1～60、码率 100000～20000000、GOP 1～600。</p>
+<p>先结束录像，然后在板端提交完整 JSON：</p>
+<pre><code class="language-bash">printf '%s\n' '{&quot;device&quot;:&quot;/dev/video44&quot;,&quot;codec&quot;:&quot;h265&quot;,&quot;width&quot;:1920,&quot;height&quot;:1080,&quot;fps&quot;:30,&quot;bitrate&quot;:4000000,&quot;gop&quot;:30}' | python3 avctl.py start --config-stdin
+</code></pre>
+<p>解释：<code>printf</code> 把配置 JSON 写入标准输出；管道送给 <code>avctl.py</code>；<code>--config-stdin</code> 从标准输入读取配置。这里将码率改成 4 Mbit/s；原直播通过受控停止/重启应用配置，可能短暂停画面。未知字段、无效类型和越界值会被拒绝；录像中也会拒绝改变直播配置。此功能是重启应用配置，不是无缝运行时调码率。</p>
+<p>回到本轮默认配置：</p>
+<pre><code class="language-bash">cat config.example.json | python3 avctl.py start --config-stdin
+</code></pre>
+<p>解释：<code>cat</code> 读取项目默认配置，通过标准输入提交；随后可按第 3 节打开 HDMI 预览或重开电脑播放器。</p>
+<h2 id="section-8">7. 状态、日志和停止</h2>
+<pre><code class="language-bash">python3 avctl.py logs --lines 40
+</code></pre>
+<p>解释：返回编码、录像和预览的最近日志；<code>--lines 40</code> 限制每类返回 40 行，最大 500 行。不需要手工搜索 PID 或读取整个大日志。</p>
+<pre><code class="language-bash">python3 avctl.py preview-stop
+</code></pre>
+<p>解释：只停止此控制器打开的 HDMI 播放器；直播和电脑客户端继续运行。</p>
+<pre><code class="language-bash">python3 avctl.py stop
+</code></pre>
+<p>解释：先正常结束录像，再停止此控制器的预览和编码进程，释放摄像头。不会终止其他播放器或无关进程。RTSP 中继服务可以保持运行等待下一次发布。</p>
+<p>电脑刷新本地方案页面的状态：</p>
+<pre><code class="language-powershell">powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\refresh_status.ps1
+</code></pre>
+<p>解释：启动只读 ADB 采样脚本；参数含义同部署命令。脚本自动检测新 FFmpeg/RTSP 与原 GStreamer/TCP 链路，输出本机 <code>board_status.js</code>；随后刷新方案页面。它不会启动服务或控制摄像头，超过 5 分钟会显示快照过期。</p>
+<h2 id="section-9">8. 源码与兼容补丁为什么必要</h2>
+<ul>
+<li>系统 FFmpeg 虽带 <code>--enable-rkmpp</code>，实际编码器列表没有 <code>hevc_rkmpp</code>，所以这次构建独立 ffmpeg-rockchip。</li>
+<li>当前摄像头是 NV12M 两平面，不能把 UV 指针当作 Y 内存后面的连续部分。</li>
+<li>固定上游提交的多平面拷贝中混用了平面索引与 <code>data_offset</code>。补丁按平面选择映射地址，再应用偏移，并逐行去掉 padding。</li>
+<li>补丁还补齐 NV12M 格式识别、修正 mmap 失败判定与映射数组释放、把不支持 G_PARM 时的帧率分数修正为正确方向。</li>
+<li>对应头文件及 C 测试保存在 <code>patches/</code> 与 <code>tests/</code>。测试使用不同 Y/UV 数据、非零偏移和不同 stride，验证输出与已知期望一致，再检查非法长度与尺寸拒绝。</li>
+<li><code>avctl.py</code> 使用 Unix socket 为多次 CLI 请求共享一个控制状态；后台线程读取实际编码进度并监测异常退出。它只管理自己启动的子进程。</li>
+</ul>
+<h2 id="section-10">9. 验收工具与证据</h2>
+<p>已完成的检查和最终测试数据见 <a href="FFmpeg_%E5%85%A8%E9%93%BE%E8%B7%AF%E9%AA%8C%E6%94%B6%E8%AE%B0%E5%BD%95.md">FFmpeg 全链路验收记录</a>。验证工具不是普通启动命令，<code>run_acceptance.sh</code> 会主动中断/恢复直播做 10 次启停与 RTSP 服务重启；使用前应知道画面会短暂中断。</p>
+<p>板端单元测试：</p>
+<pre><code class="language-bash">python3 -m unittest discover -s tests -p 'test_*.py' -v
+</code></pre>
+<p>解释：<code>-m unittest</code> 运行 Python 标准测试框架，<code>discover</code> 搜索 <code>tests</code> 下匹配文件，<code>-v</code> 显示各测试结果。它验证配置拒绝、忙摄像头保护、录像时配置保护和截图前置条件，不启停真实摄像头。</p>
+<p>板端完整验收：</p>
+<pre><code class="language-bash">bash tests/run_acceptance.sh
+</code></pre>
+<p>解释：执行实际硬件验收：测试 NV12M 与控制接口，录制至少一分钟、正常封口，执行 10 次启停、重启 RTSP 服务，再持续监测 30 分钟。它会改变正在运行的直播状态；结果写入 <code>build/</code>，失败时尝试恢复此控制器的直播和 HDMI 播放。</p>
+<p>电脑连接恢复测试：</p>
+<pre><code class="language-powershell">python .\tools\test_rtsp_client.py
+</code></pre>
+<p>解释：电脑 Python 连续连接默认 RTSP 地址 5 次，每次解码一帧并测量耗时。这个值是连接到可解码帧的时间，不是摄像头到屏幕的真实延迟。</p>
+<h2 id="section-11">10. 常见问题与恢复</h2>
+<table>
+<thead>
+<tr>
+<th>现象</th>
+<th>原因与处理</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>Camera busy</code></td>
+<td>其他程序占用采集节点；先核对其身份，只在原终端停止自己的管线</td>
+</tr>
+<tr>
+<td><code>Required hardware encoder unavailable</code></td>
+<td>独立运行环境尚未构建成功；查询 <code>check</code>、构建日志与版本锁，不回退软件编码</td>
+</tr>
+<tr>
+<td><code>Stream is not ready</code></td>
+<td>直播尚未出帧、服务未就绪或编码已经退出；查看 <code>status</code> 和 <code>logs</code></td>
+</tr>
+<tr>
+<td>电脑有首帧参考帧提示</td>
+<td>中途加入等待下一个关键帧；持续报错时检查流和 GOP</td>
+</tr>
+<tr>
+<td>HDMI 失败</td>
+<td>必须有已登录的 X11 图形会话；当前已验证 <code>:0</code>，不要照搬到其它固件会话</td>
+</tr>
+<tr>
+<td>录像文件仍是 partial</td>
+<td>未正确封口，查录像日志；不要简单改名当作成功文件</td>
+</tr>
+<tr>
+<td>旧 5000 无监听</td>
+<td>当前使用新 RTSP 8554，是预期的链路变化</td>
+</tr>
+<tr>
+<td>重新启动板子后没有画面</td>
+<td>默认没有开启自动启动，按第 3 节手动启动</td>
+</tr>
+</tbody>
+</table>
+<p>回到原 GStreamer 方案时，先执行第 7 节的 <code>avctl.py stop</code> 释放摄像头，再在板端执行：</p>
+<pre><code class="language-bash">DISPLAY=:0 bash /userdata/av_dev/07_h265_preview_tcp.sh
+</code></pre>
+<p>解释：<code>DISPLAY=:0</code> 选择图形会话，<code>bash</code> 执行保留的 07 脚本。这会回到旧的 HDMI + TCP 5000 裸 H.265 方式。原录像和配置不会被删除。</p>
+<h2 id="section-12">11. 版本、备份与后续开发</h2>
+<p>构建源码提交和 MediaMTX SHA-256 在 <code>versions.json</code>；实际二进制和补丁校验值由构建脚本保存到板端 <code>runtime/build-manifest.json</code>。本次实施前已有本地备份及 Git 标签 <code>before-ffmpeg-fullchain-20261013</code>。</p>
+<p>代码、补丁、配置示例、操作说明和验收工具上传 GitHub；真实录像、截图、设备快照、凭据、缓存和运行组件保留在本地。重新打包不会把这些运行数据混入 ZIP。</p>
+<p>后续 Windows 上位机的架构、SSH 协议和界面设计见 <a href="Windows_%E4%B8%8A%E4%BD%8D%E6%9C%BA%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%BC%80%E6%BA%90%E8%B0%83%E7%A0%94.md">上位机设计与开源调研</a>。本轮交付该设计文档，桌面程序尚未开发。</p>
+</main></div></body></html>

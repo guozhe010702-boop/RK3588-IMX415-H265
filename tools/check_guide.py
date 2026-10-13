@@ -5,8 +5,8 @@ import subprocess
 import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
-guide = next((ROOT / "docs").glob("*.md"))
-text = guide.read_text(encoding="utf-8")
+guides = sorted((ROOT / "docs").glob("*.md"))
+text = '\n'.join(guide.read_text(encoding="utf-8") for guide in guides)
 blocks = re.findall(r"```(bash|powershell)\n(.*?)```", text, re.S)
 git_bash = Path("C:/Program Files/Git/bin/bash.exe")
 
@@ -32,7 +32,7 @@ with tempfile.TemporaryDirectory(prefix="mpp_guide_check_") as tmp:
         if checked.returncode:
             raise RuntimeError(f"{language} block {index}: " + checked.stderr.decode(errors="replace") + checked.stdout.decode(errors="replace"))
 
-for document in [ROOT / "README.md", guide]:
+for document in [ROOT / "README.md"] + guides:
     for target in re.findall(r"\]\(([^)]+)\)", document.read_text(encoding="utf-8")):
         if "://" not in target and not target.startswith("#"):
             assert (document.parent / target.split("#", 1)[0]).exists(), target

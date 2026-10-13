@@ -4,7 +4,7 @@
 
 ## 1. 先理解现在运行的是什么
 
-目前持续运行的 HDMI 画面与电脑 ffplay 来自 **07 GStreamer 脚本**。路线二的 C 程序已经部署并测试，但它是按指定帧数录制 H.265 文件的学习程序，录完自动退出。
+2026-10-13 已切换到 **FFmpeg + RK3588 VPU + MediaMTX RTSP**，HDMI 与电脑读取同一直播流。操作见 [FFmpeg 全链路指南](FFmpeg_全链路操作指南.md)。原 07 GStreamer/TCP 5000 脚本保留为备用。路线二的 C 程序已经部署并测试，但它是按指定帧数录制 H.265 文件的学习程序，录完自动退出。
 
 | 程序 | 输入与输出 | 现在可以做什么 |
 | --- | --- | --- |
@@ -12,7 +12,7 @@
 | `yuv_mpp_enc` | 连续 NV12 文件 → H.265 文件 | 不打开摄像头，单独学习和验证 MPP |
 | `v4l2_mpp_enc` | `/dev/video44` 双平面 NV12M → H.265 文件 | 学习真实取帧、内存布局、逐帧硬编 |
 
-**摄像头 C 程序和 07 不能同时采集 `/dev/video44`。** 先做不占摄像头的文件测试，准备好后暂停 07，完成摄像头测试，再恢复 07。编译、阅读源码和文件测试都不需要停当前画面。
+**摄像头 C 程序与 FFmpeg 或 07 不能同时采集 `/dev/video44`。** 先做不占摄像头的文件测试，准备好后暂停当前直播，完成摄像头测试，再恢复直播。编译、阅读源码和文件测试都不需要停当前画面。
 
 2026-10-12 已验证：两个程序在板端编译成功；离线测试生成完整 30 帧 640×360 HEVC；IMX415 生成完整 60 帧 1920×1080 HEVC，耗时约 1.96 秒。`ffprobe -count_frames` 验证了帧数。短测试不等于长时间稳定性验证。
 
@@ -121,51 +121,21 @@ ffprobe -v error -f hevc -count_frames \
 
 ## 5. 第二轮：暂停预览，测试 IMX415，再恢复
 
-### 5.1 板端确认并暂停 07
+### 5.1 板端暂停当前 FFmpeg 直播
+
+开发板 Bash：
 
 ```bash
-ss -lntp 'sport = :5000'
+python3 /userdata/av_dev/ffmpeg_pipeline/avctl.py stop
 ```
 
-解释：`ss` 查看 TCP 套接字；`-l` 只看监听；`-n` 显示数字地址；`-t` 选 TCP；`-p` 显示进程；过滤条件限定本地 5000 端口。记录输出中的进程，并确认它是当前预览/推流管线。
-
-如果 07 在你面前的原终端前台运行，在那个终端按 `Ctrl+C`。本次接管实例在后台运行，需要通过 PID 停止；在板端执行下面两步获取并核对，不能照抄旧日志里的 PID：
-
-```bash
-stream_pid=$(ss -H -lntp 'sport = :5000' | sed -n 's/.*pid=\([0-9][0-9]*\).*/\1/p' | sort -u)
-```
-
-解释：`-H` 去掉表头；`sed` 提取监听进程 PID；`sort -u` 去重；`$(...)` 把结果保存到 Bash 变量 `stream_pid`。这条命令只读取状态。
-
-```bash
-if [[ "$stream_pid" =~ ^[0-9]+$ ]]; then
-  ps -ww -p "$stream_pid" -o args=
-else
-  echo '没有找到唯一监听进程，请重新检查，暂不停止任何进程。'
-fi
-```
-
-解释：先检查 PID 是单个数字，随后 `ps -p` 查看该进程；`-ww` 避免截断参数；`-o args=` 显示完整启动命令。确认其中包含当前 `/dev/video44`、`mpph265enc` 和 TCP 5000 后，才执行下面停止命令。
-
-```bash
-if [[ "$stream_pid" =~ ^[0-9]+$ ]]; then
-  kill -TERM "$stream_pid"
-fi
-```
-
-解释：只向刚核对的单个 PID 发送结束信号。这里会短暂停止 HDMI 与电脑画面；不要改成 `pkill gst-launch`，也不要对未确认的进程执行。保持在同一个板端 shell 中操作，变量才仍存在。
+解释：`python3` 执行统一入口，`stop` 先正常结束录像，再停止本服务的 HDMI 播放和 FFmpeg 采集，释放摄像头。不会终止其它应用。此时两端画面短暂中断。
 
 ```bash
 lsof /dev/video44
 ```
 
-解释：确认摄像头已经释放；应没有列出的占用进程。`gvfs` 的路径警告与这个设备节点的占用不是一回事；关注是否还有进程行。若未释放，先检查原进程是否仍在退出。
-
-```bash
-ss -lntp 'sport = :5000'
-```
-
-解释：再次确认 5000 已没有监听进程。摄像头与端口释放后再继续。
+解释：`lsof` 检查摄像头仍被哪些进程打开。没有进程行时再运行 C 程序；如果有无关应用占用，先核对其身份。不要直接批量杀进程。旧 07 的停止方法见 FFmpeg 指南中的恢复说明。
 
 ### 5.2 板端运行摄像头 C 程序
 
@@ -184,25 +154,33 @@ ffprobe -v error -f hevc -count_frames \
 
 解释：与文件测试相同，检查摄像头输出是否为完整的 60 帧 HEVC 和实际尺寸。码流只有视频，没有音频，也没有 MP4 容器。
 
-### 5.3 板端恢复 HDMI/TCP，电脑重连
+### 5.3 板端恢复 FFmpeg / HDMI，电脑重连 RTSP
+
+开发板 Bash：
 
 ```bash
-DISPLAY=:0 bash /userdata/av_dev/07_h265_preview_tcp.sh
+python3 /userdata/av_dev/ffmpeg_pipeline/avctl.py start
 ```
 
-解释：在板端运行；`DISPLAY=:0` 为这次启动选择已有的图形显示会话，`bash` 执行 07。它保持前台运行，当前终端不要再启动第二条摄像头管线。若 C 程序失败，确认它已退出后，同样执行此步骤恢复。
+解释：重新启动 FFmpeg 硬编直播；不带配置时沿用保存的参数。先确认摄像头 C 程序已经退出。
 
-在电脑 **另开 PowerShell**：
+```bash
+python3 /userdata/av_dev/ffmpeg_pipeline/avctl.py preview-start
+```
+
+解释：启动板端 HDMI 播放器，它读取 RTSP，不再次采集摄像头。
+
+电脑 PowerShell：
 
 ```powershell
-ffplay -fflags nobuffer -flags low_delay -f hevc tcp://192.168.2.221:5000
+ffplay -rtsp_transport tcp -fflags nobuffer -flags low_delay rtsp://192.168.2.221:8554/imx415
 ```
 
-解释：`ffplay` 显示网络视频；`-fflags nobuffer` 减少输入缓存；`-flags low_delay` 请求低延迟解码；`-f hevc` 指定裸 H.265；地址是板子 IP 与 TCP 端口。加入已经在运行的码流时可能需要等待携带参数集的关键帧；不能只凭 TCP 已连接就判定已经有视频。
+解释：`ffplay` 播放直播；`-rtsp_transport tcp` 使用 TCP；`-fflags nobuffer` 与 `-flags low_delay` 减少缓存；URL 指向板端 8554 的 imx415 流。IP 变化时替换地址。
 
 ### 5.4 把 C 程序录制的文件拿回电脑看
 
-恢复 07 后，在电脑另一个 PowerShell 中操作。如果这是新开的终端，先设置它自己的 ADB 变量：
+恢复直播后，在电脑另一个 PowerShell 中操作。如果这是新开的终端，先设置它自己的 ADB 变量：
 
 ```powershell
 $adbPath = 'C:\Users\dvsense_docker\Desktop\work\RK3588\Tools\platform-tools\adb.exe'
@@ -290,7 +268,7 @@ PTS 目前按 `帧号×1000000/fps` 生成。裸 `.h265` 文件不保存 MP4 那
 
 ### 8.1 不改源码：比较 2 与 4 Mbit/s
 
-在暂停 07 后，板端运行：
+在暂停当前直播后，板端运行：
 
 ```bash
 ./v4l2_mpp_enc -d /dev/video44 -o learn_2mbps.h265 -c h265 -w 1920 -h 1080 -b 2000000 -f 30 -n 300
@@ -326,7 +304,7 @@ Copy-Item -Path '.\board\v4l2_mpp_enc\*' -Destination '.\音视频代码包\boar
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\deploy.ps1 -BuildExamples
 ```
 
-解释：重新上传源码并在板端增量编译；各选项含义同第 3 节。正在运行的 GStreamer 管线与这些 C 二进制无关，因此编译不会让当前两端画面切换成 C 程序。之后依次执行文件测试、短摄像头测试、恢复 07。
+解释：重新上传源码并在板端增量编译；各选项含义同第 3 节。正在运行的直播管线与这些 C 二进制无关，因此编译不会让当前两端画面切换成 C 程序。之后依次执行文件测试、短摄像头测试、恢复当前 FFmpeg 直播。
 
 需要同步整个交付副本并重新生成 ZIP 时，在电脑项目根目录运行：
 
@@ -345,7 +323,7 @@ python .\tools\package_project.py
 1. **先做参数实验与更长验证**：同场景比较 2/4 Mbit/s 与 GOP 30/60；检查输出尺寸、完整帧数、耗时、平均码率。保存日志，再做分钟级验证。当前 60 帧测试只证明短链路可用。
 2. **补足可维护性**：采集时间戳、编码耗时统计、信号退出与资源清理、有限等待和超时恢复。避免进程卡住后摄像头一直被占用。
 3. **运行时动态码率**：在共用编码器层增加更新函数，同时更新 `rc:bps_target/max/min`，再调用 `MPP_ENC_SET_CFG`。先在同步帧循环的帧边界应用，记录切换帧号；这与重启程序时改变 `-b` 是两种能力。
-4. **自研 TCP 推流与预览**：把 `write_packet()` 抽成输出回调，支持文件和网络；处理 partial send、断开重连、客户端加入时的参数集/关键帧、慢客户端背压。HDMI 预览需要独立显示支路，不能让显示或网络卡住采集线程。完成前继续用已验证的 07 做实时显示。
+4. **自研 TCP 推流与预览**：把 `write_packet()` 抽成输出回调，支持文件和网络；处理 partial send、断开重连、客户端加入时的参数集/关键帧、慢客户端背压。HDMI 预览需要独立显示支路，不能让显示或网络卡住采集线程。完成前继续用已验证的 FFmpeg 直播做实时显示。
 5. **零拷贝与 ROI**：先核对 NV12M 两平面 DMA-BUF 导出的布局能否直接匹配 MPP；若不能需要重排/转换。ROI 按当前 MPP 版本的结构与元数据接口实现，不能把其它 SDK 的示例直接复制进来。
 6. **再评估路线三**：目前板端 FFmpeg 没有 rkmpp 编码器，未发现 Rockit 开发组件；需要匹配的 SDK/工具链与部署验证，不应将 `libx265` 软件编码当作硬编。
 
@@ -356,7 +334,7 @@ python .\tools\package_project.py
 | 现象 | 优先检查 |
 | --- | --- |
 | PowerShell 不认识 `DISPLAY=:0` | 命令执行在错误终端，转到板端 Bash |
-| `Device or resource busy` | 07 或其它进程尚占用摄像头，重新用 lsof 检查 |
+| `Device or resource busy` | FFmpeg、07 或其它进程尚占用摄像头，重新用 lsof 检查 |
 | `Address already in use` | 原 07 仍监听 5000，核对 ss 的 PID |
 | `create H.265 output: File exists` | 用新输出文件名，程序故意拒绝覆盖 |
 | `Expected two-plane NM12` | 选择的节点/驱动布局不匹配，先查看实际格式 |

@@ -1,54 +1,52 @@
-# EVM3588-B / IMX415 / MPP H.265
+# RK3588 / IMX415 / FFmpeg H.265 实时链路
 
-IMX415 接 con7，RKISP `/dev/video44` 采集。项目包含已经实测的 HDMI + H.265 TCP 预览脚本，以及用于学习 V4L2 与 MPP C API 的两个文件编码程序。
+IMX415 接 EVM3588-B con7，经 `/dev/video44` 双平面 NV12M 采集，由独立 FFmpeg 的 `hevc_rkmpp` 调用 RK3588 VPU 编码，MediaMTX 分发 RTSP。开发板 HDMI 与电脑同时播放；手动 MP4 录像使用流复制，无二次编码，支持 JPEG 截图和运行统计。
 
-先阅读 [路线二：操作、程序解释与修改指南](docs/路线二_MPP_C_API_操作与修改指南.md)。每条操作命令均标明电脑 PowerShell 或板端 Bash，并解释参数。
+默认 1920×1080、30 fps、H.265 CBR 2.5 Mbit/s、GOP 30、无音频。保留系统 FFmpeg、厂商 MPP/RGA/ISP 服务、GStreamer 方案和路线二 C 程序。验收后保持新链路运行，未启用开机自动启动。
 
 | 内容 | 入口 |
 | --- | --- |
-| 方案网页 | [EVM3588-B_音视频实时压缩方案.html](EVM3588-B_音视频实时压缩方案.html)，下载后在本地浏览器打开 |
-| Windows 部署 | [deploy.ps1](deploy.ps1) |
-| HDMI + H.265 TCP | [board/07_h265_preview_tcp.sh](board/07_h265_preview_tcp.sh) |
-| 共用 MPP H.265 引擎 | [board/v4l2_mpp_enc/mpp_h265.c](board/v4l2_mpp_enc/mpp_h265.c) |
-| 无摄像头文件编码 | [board/v4l2_mpp_enc/yuv_mpp_enc.c](board/v4l2_mpp_enc/yuv_mpp_enc.c) |
-| IMX415 双平面取帧 | [board/v4l2_mpp_enc/v4l2_mpp_enc.c](board/v4l2_mpp_enc/v4l2_mpp_enc.c) |
-| 板端构建 | [board/v4l2_mpp_enc/Makefile](board/v4l2_mpp_enc/Makefile) |
-| 网页状态采样 | [refresh_status.ps1](refresh_status.ps1)；[board_status.example.js](board_status.example.js) 是空状态模板 |
+| 部署、构建、播放、录像、截图、故障处理 | [FFmpeg 全链路操作指南](docs/FFmpeg_全链路操作指南.md) |
+| 实测数据与边界 | [全链路验收记录](docs/FFmpeg_全链路验收记录.md) |
+| Windows 上位机下一阶段设计 | [设计与开源调研](docs/Windows_上位机设计与开源调研.md) |
+| 方案与采样状态网页 | [方案网页](EVM3588-B_音视频实时压缩方案.html)，下载后本地打开 |
+| 统一控制接口 | [avctl.py](board/ffmpeg_pipeline/avctl.py) |
+| 版本锁定与构建 | [versions.json](board/ffmpeg_pipeline/versions.json)、[build_runtime.sh](board/ffmpeg_pipeline/build_runtime.sh) |
+| NV12M 兼容补丁 | [patches](board/ffmpeg_pipeline/patches/0001-nv12m-capture.patch) |
+| V4L2 与 MPP C API 学习 | [路线二指南](docs/路线二_MPP_C_API_操作与修改指南.md) |
 
 ## 操作入口
 
 电脑 PowerShell，在项目根目录执行：
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\deploy.ps1 -BuildExamples
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\deploy.ps1
 ```
 
-`powershell.exe` 启动子进程；`-NoProfile` 不加载个人配置；`-ExecutionPolicy Bypass` 对这次运行放行脚本；`-File` 指定入口；`-BuildExamples` 上传后在板端编译两个 C 程序。需要时加 `-AdbPath`，后面接本机 adb.exe 的完整路径。部署不会停止当前实时画面；C 源码位于板端 `/userdata/av_dev/mpp_route2/`。
+`powershell.exe` 启动子进程；`-NoProfile` 避免加载个人配置；`-ExecutionPolicy Bypass` 仅为本次运行放行；`-File` 指定脚本。上传源码，不自动重建或切换管线。首次使用还需按完整指南构建和安装板端服务。
 
-开发板 Bash，在摄像头空闲后执行：
+开发板 Bash，查询状态：
 
 ```bash
-cd /userdata/av_dev/mpp_route2
+python3 /userdata/av_dev/ffmpeg_pipeline/avctl.py status
 ```
 
-`cd` 进入 C 项目的板端目录。
+`python3` 执行统一入口；`status` 返回实际采集进程、编码器、VPU 访问、帧进度、RTSP、HDMI 和录像状态，不重新占用摄像头。
 
-```bash
-./v4l2_mpp_enc -d /dev/video44 -o new_capture.h265 -c h265 -w 1920 -h 1080 -b 4000000 -f 30 -n 60
+电脑 PowerShell，直播启动后播放：
+
+```powershell
+ffplay -rtsp_transport tcp -fflags nobuffer -flags low_delay rtsp://192.168.2.221:8554/imx415
 ```
 
-`./v4l2_mpp_enc` 运行当前目录程序；`-d` 指定采集节点；`-o` 指定未使用的输出文件名；`-c` 指定 H.265；`-w/-h` 请求宽高；`-b` 是目标 bit/s；`-f` 配置帧率；`-n` 是帧数。这个 C 程序录完退出；它与 07 不能同时打开摄像头。完整的暂停、检查输出与恢复步骤见操作指南。
+`ffplay` 播放实时流；`-rtsp_transport tcp` 使用 TCP；后两组选项减少缓冲；URL 中替换成实际板子 IP。完整指南解释每条构建和控制命令。
 
-## 验证与边界
+## 实测范围与后续工作
 
-2026-10-12 在实际开发板验证：
+本轮使用 H.265 进行真实硬编、两端显示、MP4 回放、截图、十次启停、服务重启与连续运行验收。时间、帧数、资源数据见验收记录。连接到首帧的时间不等于镜头到屏幕的端到端延迟，后者尚未测量。
 
-- 板端 MPP 开发文件版本 `1.5.0-4ubuntu2.2firefly5`，两个 C 程序编译通过。
-- NV12 文件 → 30 帧 640×360 HEVC；IMX415 → 60 帧 1920×1080 HEVC，均经 ffprobe 统计完整帧数。
-- GStreamer 07 支持 HDMI 与电脑 ffplay 同时看画面，用户已确认两端正常。
+Windows 桌面软件目前交付设计，板端控制接口已实现。H.264 已提供参数入口，完整验收仍以 H.265 为准。曝光/增益与 RKAIQ 协调、ROI、算法识别、音频、外网和多路相机待后续开发。
 
-C 程序当前输出裸 H.265 文件；运行时动态码率、ROI、自研网络输出、C HDMI 显示、零拷贝与音视频同步属于后续开发。短测试不代表已完成长期稳定性验证。
+网页状态由电脑 [refresh_status.ps1](refresh_status.ps1) 手动生成并注明采样时间；浏览器本身不连接 SSH、不直接播放 RTSP。运行快照、录像、截图、凭据、备份与构建产物保留本地，不上传 Git。`音视频代码包/` 与 ZIP 是本地交付副本，Git 以根目录 `board/` 为准；厂商 SDK 不入仓库。
 
-网页状态是本地采样快照，生成的 `board_status.js` 不入 Git。首次下载可以将 `board_status.example.js` 复制为 `board_status.js`，或运行状态采样脚本。SDK PDF 链接和 ZIP 下载链接在未配置对应本地资料时不可用；仓库不包含厂商 SDK 或本地交付 ZIP。
-
-Git 跟踪根目录 `board/` 和项目说明；`音视频代码包/` 是本地交付副本。备份、SDK、录像、二进制、电脑缓存与运行状态由 `.gitignore` 排除。这个项目自己的源码未另行声明开源许可证。
+修改前备份在 `backups/before_ffmpeg_fullchain_20261013_093100/`，包含 Git bundle 和旧方案。上游组件许可证以其源码为准，本项目未另行声明整体开源许可证。

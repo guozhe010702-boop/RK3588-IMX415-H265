@@ -1,0 +1,6 @@
+{
+  "ffmpeg": {"url": "https://github.com/nyanmisaka/ffmpeg-rockchip.git", "branch": "master", "commit": "d90e3a1c18d7929383cf88c1b3da2e2d1c966cbf"},
+  "mpp": {"url": "https://gitee.com/nyanmisaka/mpp.git", "branch": "jellyfin-mpp", "commit": "a9380ef333102ac318628f83b5f7a460d377749e"},
+  "rga": {"url": "https://gitee.com/nyanmisaka/rga.git", "branch": "jellyfin-rga", "commit": "1d330cc28551943bed3380261a5a9c6fbd58ff53"},
+  "mediamtx": {"version": "v1.21.2", "url": "https://github.com/bluenviron/mediamtx/releases/download/v1.21.2/mediamtx_v1.21.2_linux_arm64.tar.gz", "sha256": "180a235374a548d9133cdd5e20f5dbd8b01317be1c86e0d7e66df585dc42ed6f"}
+}

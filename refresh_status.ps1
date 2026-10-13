@@ -54,6 +54,17 @@ $preview = $processCommand -match '(?:^|\s)tee(?:\s|$)' -and
            $processCommand -match '(?:auto|xv|gl|wayland)videosink'
 $connected = $connections -match '(?m)^ESTAB\s'
 
+# Query the new controller without starting services or changing camera state.
+$ffState = $null
+$ffResponse = @(& $AdbPath -s $serial shell 'test -f /userdata/av_dev/ffmpeg_pipeline/avctl.py && python3 /userdata/av_dev/ffmpeg_pipeline/avctl.py status' 2>$null) -join "`n"
+if ($LASTEXITCODE -eq 0 -and $ffResponse.Trim()) {
+    try {
+        $parsed = $ffResponse.Trim() | ConvertFrom-Json
+        if ($parsed.ok) { $ffState = $parsed.result }
+    } catch { $ffState = $null }
+}
+$useFFmpeg = $ffState -and ($ffState.state -in @('running','starting','recovering') -or -not $pidValue)
+
 $status = [ordered]@{
     sampledAt = (Get-Date).ToString('yyyy-MM-dd HH:mm:ss zzz')
     sampledAtEpochMs = [DateTimeOffset]::Now.ToUnixTimeMilliseconds()
@@ -67,12 +78,45 @@ $status = [ordered]@{
     h265Pipeline = [bool]$h265
     previewBranchConfigured = [bool]$preview
     tcpClientConnected = [bool]$connected
+    pipelineType = 'gstreamer'
 }
-$json = $status | ConvertTo-Json -Depth 3 -Compress
+if ($useFFmpeg) {
+    $rtspListener = @(& $AdbPath -s $serial shell "ss -lntp 'sport = :8554'" 2>$null) -join "`n"
+    $rtspPid = $null
+    if ($rtspListener -match 'pid=(\d+)') { $rtspPid = [int]$Matches[1] }
+    $encoderOwnsCamera = $false
+    if ($ffState.capturePid) { $encoderOwnsCamera = $cameraUsers -match "(?m)^\S+\s+$($ffState.capturePid)\s" }
+    $rtspConnections = @(& $AdbPath -s $serial shell "ss -Hntp 'sport = :8554'" 2>$null)
+    $remoteConnected = $false
+    foreach ($line in $rtspConnections) {
+        $columns = @($line.Trim() -split '\s+')
+        if ($columns.Count -ge 5 -and $columns[0] -eq 'ESTAB' -and $columns[4] -notmatch '^(127\.|\[?::1\]?:)') { $remoteConnected = $true }
+    }
+    $status.pipelineType = 'ffmpeg'
+    if ($ffState.config) { $status.camera = $ffState.config.device }
+    $status.port = 8554
+    $status.listenerPid = $rtspPid
+    $status.portListening = [bool]$rtspPid
+    $status.cameraOwnedByListener = [bool]$encoderOwnsCamera
+    $status.h265Pipeline = $ffState.encoder -eq 'hevc_rkmpp' -and $ffState.state -eq 'running'
+    $status.previewBranchConfigured = [bool]$ffState.previewRunning
+    $status.tcpClientConnected = [bool]$remoteConnected
+    $status['encoderPid'] = $ffState.capturePid
+    $status['streamReady'] = [bool]$ffState.rtspReady
+    $status['hardwareDeviceOpen'] = [bool]$ffState.vpuDeviceOpen
+    $status['fps'] = $ffState.fps
+    $status['frame'] = $ffState.frame
+    $status['recording'] = [bool]$ffState.recording
+    $status['recordingFile'] = $ffState.recordingFile
+    $status['lastRecording'] = $ffState.lastRecording
+    $status['readers'] = $ffState.readers
+    $status['lastError'] = $ffState.lastError
+}
+$json = $status | ConvertTo-Json -Depth 12 -Compress
 $targetDir = Split-Path -Parent $OutputPath
 if ($targetDir -and -not (Test-Path -LiteralPath $targetDir)) {
     New-Item -ItemType Directory -Path $targetDir -Force | Out-Null
 }
 [System.IO.File]::WriteAllText($OutputPath, "window.EVM3588Status = $json;`n", (New-Object System.Text.UTF8Encoding($false)))
 Write-Host "状态已写入：$OutputPath"
-Write-Host "采样时间：$($status.sampledAt)；H.265 监听：$($status.h265Pipeline)；摄像头由监听进程占用：$($status.cameraOwnedByListener)；TCP 客户端：$($status.tcpClientConnected)"
+Write-Host "采样时间：$($status.sampledAt)；链路：$($status.pipelineType)；H.265 在线：$($status.h265Pipeline)；远程客户端：$($status.tcpClientConnected)"

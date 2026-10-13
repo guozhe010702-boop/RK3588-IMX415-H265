@@ -10,6 +10,15 @@
 /_board_reference/
 /_shots/
 /test_unzip/
+/_work_ffmpeg/
+*.bundle
+/board/ffmpeg_pipeline/runtime/
+/board/ffmpeg_pipeline/build/
+/board/ffmpeg_pipeline/state/
+/board/ffmpeg_pipeline/logs/
+/board/ffmpeg_pipeline/recordings/
+/board/ffmpeg_pipeline/snapshots/
+/board/ffmpeg_pipeline/config.json
 
 # Generated board state may contain IPs, PIDs and device IDs.
 /board_status.js

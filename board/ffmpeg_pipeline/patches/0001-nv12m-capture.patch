@@ -1,0 +1,279 @@
+--- a/libavdevice/v4l2-common.c
++++ b/libavdevice/v4l2-common.c
+@@ -50,6 +50,9 @@
+     { AV_PIX_FMT_GRAY16LE,AV_CODEC_ID_RAWVIDEO, V4L2_PIX_FMT_Z16     },
+ #endif
+     { AV_PIX_FMT_NV12,    AV_CODEC_ID_RAWVIDEO, V4L2_PIX_FMT_NV12    },
++#ifdef V4L2_PIX_FMT_NV12M
++    { AV_PIX_FMT_NV12,    AV_CODEC_ID_RAWVIDEO, V4L2_PIX_FMT_NV12M   },
++#endif
+ #ifdef V4L2_PIX_FMT_NV16
+     { AV_PIX_FMT_NV16,    AV_CODEC_ID_RAWVIDEO, V4L2_PIX_FMT_NV16    },
+ #endif
+--- a/libavdevice/v4l2.c
++++ b/libavdevice/v4l2.c
+@@ -46,13 +46,14 @@
+ #include "avdevice.h"
+ #include "timefilter.h"
+ #include "v4l2-common.h"
++#include "v4l2_nv12m_copy.h"
+ #include <dirent.h>
+ 
+ #if CONFIG_LIBV4L2
+ #include <libv4l2.h>
+ #endif
+ 
+-static const int desired_video_buffers = 256;
++static const int desired_video_buffers = 8;
+ 
+ #define V4L_ALLFORMATS  3
+ #define V4L_RAWFORMATS  1
+@@ -97,6 +98,7 @@
+     int buffers;
+     atomic_int buffers_queued;
+     int plane_count;
++    unsigned int plane_pitch[VIDEO_MAX_PLANES];
+     void ***buf_start;
+     unsigned int **buf_len;
+     char *standard;
+@@ -210,42 +212,44 @@
+                        uint32_t pixelformat)
+ {
+     struct video_data *s = ctx->priv_data;
+-    struct v4l2_format fmt = { .type = (s->multi_planer) ? V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE : V4L2_BUF_TYPE_VIDEO_CAPTURE };
+-    int res = 0;
+-
+-    fmt.fmt.pix.width = *width;
+-    fmt.fmt.pix.height = *height;
+-    fmt.fmt.pix.pixelformat = pixelformat;
+-    fmt.fmt.pix.field = V4L2_FIELD_ANY;
+-
+-    /* Some drivers will fail and return EINVAL when the pixelformat
+-       is not supported (even if type field is valid and supported) */
++    struct v4l2_format fmt = { .type = s->multi_planer ? V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE : V4L2_BUF_TYPE_VIDEO_CAPTURE };
++    uint32_t actual_format, field;
++    int actual_width, actual_height;
++    if (s->multi_planer) {
++        fmt.fmt.pix_mp.width = *width;
++        fmt.fmt.pix_mp.height = *height;
++        fmt.fmt.pix_mp.pixelformat = pixelformat;
++        fmt.fmt.pix_mp.field = V4L2_FIELD_NONE;
++    } else {
++        fmt.fmt.pix.width = *width;
++        fmt.fmt.pix.height = *height;
++        fmt.fmt.pix.pixelformat = pixelformat;
++        fmt.fmt.pix.field = V4L2_FIELD_ANY;
++    }
+     if (v4l2_ioctl(s->fd, VIDIOC_S_FMT, &fmt) < 0)
+-        res = AVERROR(errno);
+-
+-    if ((*width != fmt.fmt.pix.width) || (*height != fmt.fmt.pix.height)) {
+-        av_log(ctx, AV_LOG_INFO,
+-               "The V4L2 driver changed the video from %dx%d to %dx%d\n",
+-               *width, *height, fmt.fmt.pix.width, fmt.fmt.pix.height);
+-        *width = fmt.fmt.pix.width;
+-        *height = fmt.fmt.pix.height;
+-    }
+-
+-    if (pixelformat != fmt.fmt.pix.pixelformat) {
+-        av_log(ctx, AV_LOG_DEBUG,
+-               "The V4L2 driver changed the pixel format "
+-               "from 0x%08X to 0x%08X\n",
+-               pixelformat, fmt.fmt.pix.pixelformat);
+-        res = AVERROR(EINVAL);
+-    }
+-
+-    if (fmt.fmt.pix.field == V4L2_FIELD_INTERLACED) {
+-        av_log(ctx, AV_LOG_DEBUG,
+-               "The V4L2 driver is using the interlaced mode\n");
+-        s->interlaced = 1;
+-    }
+-
+-    return res;
++        return AVERROR(errno);
++    if (s->multi_planer) {
++        actual_width = fmt.fmt.pix_mp.width;
++        actual_height = fmt.fmt.pix_mp.height;
++        actual_format = fmt.fmt.pix_mp.pixelformat;
++        field = fmt.fmt.pix_mp.field;
++        for (int p = 0; p < fmt.fmt.pix_mp.num_planes && p < VIDEO_MAX_PLANES; p++)
++            s->plane_pitch[p] = fmt.fmt.pix_mp.plane_fmt[p].bytesperline;
++        if (actual_format == V4L2_PIX_FMT_NV12M && fmt.fmt.pix_mp.num_planes != 2)
++            return AVERROR(EINVAL);
++    } else {
++        actual_width = fmt.fmt.pix.width;
++        actual_height = fmt.fmt.pix.height;
++        actual_format = fmt.fmt.pix.pixelformat;
++        field = fmt.fmt.pix.field;
++    }
++    if (actual_format != pixelformat)
++        return AVERROR(EINVAL);
++    if (*width != actual_width || *height != actual_height)
++        av_log(ctx, AV_LOG_INFO, "Driver selected %dx%d\n", actual_width, actual_height);
++    *width = actual_width; *height = actual_height;
++    s->interlaced = field == V4L2_FIELD_INTERLACED;
++    return 0;
+ }
+ 
+ static int first_field(const struct video_data *s)
+@@ -372,12 +376,12 @@
+         return AVERROR(ENOMEM);
+     }
+     s->buffers = req.count;
+-    s->buf_start = av_malloc_array(s->buffers, sizeof(void **));
++    s->buf_start = av_calloc(s->buffers, sizeof(void **));
+     if (!s->buf_start) {
+         av_log(ctx, AV_LOG_ERROR, "Cannot allocate buffer pointers\n");
+         return AVERROR(ENOMEM);
+     }
+-    s->buf_len = av_malloc_array(s->buffers, sizeof(unsigned int*));
++    s->buf_len = av_calloc(s->buffers, sizeof(unsigned int*));
+     if (!s->buf_len) {
+         av_log(ctx, AV_LOG_ERROR, "Cannot allocate buffer sizes\n");
+         av_freep(&s->buf_start);
+@@ -425,7 +429,7 @@
+                                 PROT_READ | PROT_WRITE, MAP_SHARED,
+                                 s->fd, (s->multi_planer) ? buf.m.planes[iplane].m.mem_offset : buf.m.offset);
+ 
+-            if (s->buf_start[i] == MAP_FAILED) {
++            if (s->buf_start[i][iplane] == MAP_FAILED) {
+                 res = AVERROR(errno);
+                 av_log(ctx, AV_LOG_ERROR, "mmap: %s\n", av_err2str(res));
+                 return res;
+@@ -592,7 +596,7 @@
+         } else {
+             total_frame_size = buf.bytesused;
+         }
+-        if (s->frame_size > 0 && total_frame_size != s->frame_size) {
++        if (s->pixelformat != V4L2_PIX_FMT_NV12M && s->frame_size > 0 && total_frame_size != s->frame_size) {
+             av_log(ctx, AV_LOG_WARNING,
+                    "Dequeued v4l2 buffer contains %d bytes, but %d were expected. Flags: 0x%08X.\n",
+                    total_frame_size, s->frame_size, buf.flags);
+@@ -607,7 +611,27 @@
+     }
+ 
+     if (atomic_load(&s->buffers_queued) == FFMAX(s->buffers / 8, 1) || V4L2_TYPE_IS_MULTIPLANAR(buf.type)) {
+-        if (V4L2_TYPE_IS_MULTIPLANAR(buf.type)) {
++        if (s->pixelformat == V4L2_PIX_FMT_NV12M) {
++            V4L2Nv12mPlane input[2];
++            if (buf.length != 2 || (buf.flags & V4L2_BUF_FLAG_ERROR)) {
++                enqueue_buffer(s, &buf);
++                return AVERROR(EAGAIN);
++            }
++            for (int p = 0; p < 2; p++) {
++                input[p] = (V4L2Nv12mPlane) {
++                    s->buf_start[buf.index][p], s->buf_len[buf.index][p],
++                    planes[p].bytesused, planes[p].data_offset, s->plane_pitch[p]
++                };
++            }
++            res = av_new_packet(pkt, s->frame_size);
++            if (res >= 0)
++                res = v4l2_nv12m_copy(pkt->data, pkt->size, input, s->width, s->height);
++            if (res < 0) {
++                av_packet_unref(pkt);
++                enqueue_buffer(s, &buf);
++                return res;
++            }
++        } else if (V4L2_TYPE_IS_MULTIPLANAR(buf.type)) {
+             int totalbytes = 0;
+             for (int iplane = 0; iplane < buf.length; iplane++) {
+                 totalbytes += buf.m.planes[iplane].bytesused;
+@@ -621,8 +645,8 @@
+             totalbytes = 0;
+             for (int iplane = 0; iplane < buf.length; iplane++) {
+                 struct v4l2_plane *plane = &buf.m.planes[iplane];
+-                memcpy(pkt->data + totalbytes, s->buf_start[buf.index][plane->data_offset], plane->bytesused);
+-                totalbytes += plane->bytesused;
++                memcpy(pkt->data + totalbytes, (uint8_t *)s->buf_start[buf.index][iplane] + plane->data_offset, plane->bytesused - plane->data_offset);
++                totalbytes += plane->bytesused - plane->data_offset;
+             }
+         } else {
+             /* Image is at s->buff_start[buf.index] */
+@@ -726,9 +750,9 @@
+             v4l2_munmap(s->buf_start[i][iplane], s->buf_len[i][iplane]);
+         }
+     }
+-    for (int iplane = 0; iplane < s->plane_count; iplane++) {
+-        av_freep(&s->buf_start[iplane]);
+-        av_freep(&s->buf_len[iplane]);
++    for (i = 0; i < s->buffers; i++) {
++        av_freep(&s->buf_start[i]);
++        av_freep(&s->buf_len[i]);
+     }
+     av_freep(&s->buf_start);
+     av_freep(&s->buf_len);
+@@ -836,8 +860,8 @@
+                    av_err2str(ret), tpf->denominator, tpf->numerator);
+         } else if (framerate_q.num && framerate_q.den) {
+             // use user defined framerate for further error cases.
+-            tpf->numerator   = framerate_q.num;
+-            tpf->denominator = framerate_q.den;
++            tpf->numerator   = framerate_q.den;
++            tpf->denominator = framerate_q.num;
+             av_log(ctx, AV_LOG_WARNING, "ioctl(VIDIOC_G_PARM): %s, using framerate %d/%d\n",
+                    av_err2str(ret), framerate_q.num, framerate_q.den);
+         } else {
+@@ -891,7 +915,10 @@
+ {
+     int ret, i;
+ 
++    struct video_data *s = ctx->priv_data;
+     *desired_format = ff_fmt_ff2v4l(pix_fmt, ctx->video_codec_id);
++    if (s->multi_planer && *desired_format == V4L2_PIX_FMT_NV12)
++        *desired_format = V4L2_PIX_FMT_NV12M;
+ 
+     if (*desired_format) {
+         ret = device_init(ctx, width, height, *desired_format);
+--- /dev/null
++++ b/libavdevice/v4l2_nv12m_copy.h
+@@ -0,0 +1,50 @@
++/* SPDX-License-Identifier: LGPL-2.1-or-later
++ * Pack two independently mapped NV12M planes, respecting stride and offset.
++ */
++#ifndef V4L2_NV12M_COPY_H
++#define V4L2_NV12M_COPY_H
++#include <errno.h>
++#include <stddef.h>
++#include <stdint.h>
++#include <string.h>
++
++typedef struct V4L2Nv12mPlane {
++    const uint8_t *data;
++    size_t mapped_size, bytesused, data_offset, pitch;
++} V4L2Nv12mPlane;
++
++static int v4l2_nv12m_copy(uint8_t *out, size_t out_size,
++                         const V4L2Nv12mPlane planes[2], int width, int height)
++{
++    size_t y_size, required;
++    if (!out || !planes || width <= 0 || height <= 0 || (width & 1) || (height & 1))
++        return -EINVAL;
++    if ((size_t)height > SIZE_MAX / (size_t)width)
++        return -EINVAL;
++    y_size = (size_t)width * height;
++    if (y_size > SIZE_MAX - y_size / 2)
++        return -EINVAL;
++    required = y_size + y_size / 2;
++    if (out_size < required)
++        return -EINVAL;
++    for (int p = 0; p < 2; p++) {
++        const V4L2Nv12mPlane *plane = &planes[p];
++        size_t rows = p ? (size_t)height / 2 : (size_t)height;
++        size_t available;
++        if (!plane->data || plane->bytesused > plane->mapped_size ||
++            plane->bytesused < plane->data_offset || plane->pitch < (size_t)width)
++            return -EINVAL;
++        available = plane->bytesused - plane->data_offset;
++        if (available < (size_t)width || rows - 1 > (available - width) / plane->pitch)
++            return -EINVAL;
++    }
++    for (int p = 0; p < 2; p++) {
++        const V4L2Nv12mPlane *plane = &planes[p];
++        size_t rows = p ? (size_t)height / 2 : (size_t)height;
++        uint8_t *dest = out + (p ? y_size : 0);
++        for (size_t row = 0; row < rows; row++)
++            memcpy(dest + row * width, plane->data + plane->data_offset + row * plane->pitch, width);
++    }
++    return 0;
++}
++#endif

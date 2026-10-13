@@ -37,7 +37,7 @@ button:focus-visible,a:focus-visible{outline:3px solid var(--amber);outline-offs
 .quick-step .codebar .copy{flex-shrink:0}
 .quick-tree{font-size:12.5px;white-space:pre}
 .fileitem .fnm{overflow-wrap:anywhere}
-.runtime-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;margin:16px 0}
+.runtime-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:16px 0}
 .runtime-item{border:1px solid var(--line);border-radius:10px;padding:14px;background:#fff}
 .runtime-item .label{font-size:12px;color:var(--mut)}
 .runtime-item .value{font-weight:700;margin-top:5px;overflow-wrap:anywhere}
@@ -244,7 +244,7 @@ footer .mono{color:#b9c7d5;font-size:12px}
   <div class="wrap">
     <div class="kicker">RK3588 嵌入式音视频 · 实时硬件编码方案</div>
     <h1>摄像头源数据采集 → 硬件处理 → <em>实时视频流压缩</em><br>端到端落地方案</h1>
-    <p class="lead">当前主链路已跑通：con7 的 IMX415 经 <code>/dev/video44</code> 采集 NV12，单条 GStreamer 管线同时送到板端 HDMI 预览和 H.265 TCP 推流，电脑用 ffplay 观看。下一步聚焦稳定运行和可观测状态。</p>
+    <p class="lead">当前主链路已跑通：con7 的 IMX415 经 <code>/dev/video44</code> 双平面 NV12M 采集，由独立 FFmpeg 调用 RK3588 VPU 进行 H.265 硬编；MediaMTX RTSP 同时供 HDMI 与电脑播放，支持手动 MP4 录像、JPEG 截图和实际运行统计。</p>
     <div class="hero-actions">
       <a class="action primary" href="#runtime">查看运行状态与启动命令 →</a>
       <a class="action" href="#start">查看解压与部署</a>
@@ -264,7 +264,7 @@ footer .mono{color:#b9c7d5;font-size:12px}
       <span class="chip">V4L2</span>
       <span class="chip">RGA 2D</span>
       <span class="chip">ALSA / es8388</span>
-      <span class="chip">H.265 / TCP 5000</span>
+      <span class="chip">FFmpeg · H.265 / RTSP 8554</span>
     </div>
   </div>
 </div>
@@ -274,35 +274,39 @@ footer .mono{color:#b9c7d5;font-size:12px}
   <div class="wrap">
     <div class="sec-head">
       <div class="sec-no">CURRENT PIPELINE / 运行状态</div>
-      <h2>IMX415 → HDMI 预览 + H.265 TCP 推流</h2>
+      <h2>IMX415 → FFmpeg / VPU → RTSP · HDMI · MP4</h2>
       <p>下面显示最近一次 ADB 只读采样。页面直接以 <code>file://</code> 打开，浏览器不会自行连接开发板；运行刷新脚本后重新加载页面。</p>
     </div>
     <div class="runtime-grid" aria-label="板端状态快照">
       <div class="runtime-item unknown"><div class="label">ADB 设备</div><div class="value" id="status-adb">读取中</div></div>
       <div class="runtime-item unknown"><div class="label">IMX415 / video44</div><div class="value" id="status-camera">读取中</div></div>
-      <div class="runtime-item unknown"><div class="label">H.265 / TCP 5000</div><div class="value" id="status-encoder">读取中</div></div>
+      <div class="runtime-item unknown"><div class="label" id="status-encoder-label">H.265 / RTSP 8554</div><div class="value" id="status-encoder">读取中</div></div>
       <div class="runtime-item unknown"><div class="label">HDMI 预览分支</div><div class="value" id="status-preview">读取中</div></div>
-      <div class="runtime-item unknown"><div class="label">TCP 客户端</div><div class="value" id="status-client">读取中</div></div>
+      <div class="runtime-item unknown"><div class="label">远程播放客户端</div><div class="value" id="status-client">读取中</div></div>
+      <div class="runtime-item unknown"><div class="label">VPU 设备访问</div><div class="value" id="status-vpu">读取中</div></div>
+      <div class="runtime-item unknown"><div class="label">编码帧率 / 帧进度</div><div class="value" id="status-fps">读取中</div></div>
+      <div class="runtime-item unknown"><div class="label">手动 MP4 录像</div><div class="value" id="status-record">读取中</div></div>
     </div>
     <p class="muted" id="status-sample">状态文件读取中。</p>
-    <div class="note info"><b>状态判定范围：</b>进程、设备占用和 TCP 连接来自系统快照；“预览分支已配置”表示命令中有 <code>tee</code> 和视频输出，不代表每一帧都已显示。实际画面以板端 HDMI 和电脑 ffplay 为准。</div>
+    <div class="note info"><b>状态判定范围：</b>FFmpeg 状态来自统一控制接口、实际帧进度、VPU 设备文件访问和 RTSP 会话。HDMI 卡片表示播放器进程在运行，画面以显示屏实际显示为准。原 GStreamer/TCP 链路仍可检测；系统 FFmpeg 与路线二 C 程序均保留。</div>
     <div class="grid2">
       <div class="card">
         <h3 class="sub">电脑端刷新状态</h3>
         <p class="muted">在本目录的 PowerShell 执行，随后刷新此 HTML 页面：</p>
         <div class="codewrap"><div class="codebar"><span class="fn">Windows PowerShell · av_dev 根目录</span><button class="copy" type="button">复制</button></div><pre>powershell -NoProfile -ExecutionPolicy Bypass -File .\refresh_status.ps1</pre></div>
-        <p class="muted">脚本生成同目录 <code>board_status.js</code>；采样超过 5 分钟会标记为过期。</p>
+        <p class="muted"><code>powershell</code> 启动子进程，<code>-NoProfile</code> 不加载个人配置，<code>-ExecutionPolicy Bypass</code> 仅对这次运行放行，<code>-File</code> 指定只读采样脚本。它生成本机 <code>board_status.js</code>；采样超过 5 分钟会标记为过期。</p>
       </div>
       <div class="card">
         <h3 class="sub">板端启动主链路</h3>
-        <p class="muted">新版管线已在板端接管运行。以下命令用于以后手动重启：先确认当前进程和端口已释放，再在板端图形环境执行。</p>
-        <div class="codewrap"><div class="codebar"><span class="fn">EVM3588-B Bash</span><button class="copy" type="button">复制</button></div><pre>cd /userdata/av_dev
-bash 07_h265_preview_tcp.sh --check
-DISPLAY=:0 bash 07_h265_preview_tcp.sh</pre></div>
+        <p class="muted">独立 FFmpeg 直接采集 NV12M 并以 <code>hevc_rkmpp</code> 硬编；MediaMTX 分发 RTSP。直播默认不录像，录像按需启停。</p>
+        <div class="codewrap"><div class="codebar"><span class="fn">EVM3588-B Bash</span><button class="copy" type="button">复制</button></div><pre>python3 /userdata/av_dev/ffmpeg_pipeline/avctl.py start
+python3 /userdata/av_dev/ffmpeg_pipeline/avctl.py preview-start</pre></div>
+        <p class="muted"><code>python3</code> 运行统一控制工具；<code>start</code> 启动直播，<code>preview-start</code> 打开板端 HDMI 播放器。若摄像头被其它程序占用，会明确报错；不会自动停止它们。录像中改编码参数需要先结束录像。</p>
       </div>
     </div>
-    <div class="codewrap"><div class="codebar"><span class="fn">电脑 PowerShell · 播放 H.265 裸流</span><button class="copy" type="button">复制</button></div><pre>ffplay -fflags nobuffer -flags low_delay -f hevc tcp://192.168.2.221:5000</pre></div>
-    <p class="muted">若板子 IP 变化，用板端 <code>hostname -I</code> 查新地址。手动前台启动时 Ctrl+C 只结束自己的管线；本次 ADB 接管实例在后台运行，关闭它需先核对上方状态中的 PID，再向该 PID 发送 TERM。脚本检测占用后会报错，不会结束其他 GStreamer 进程，也不会用测试图代替摄像头。</p>
+    <div class="codewrap"><div class="codebar"><span class="fn">电脑 PowerShell · RTSP 实时播放</span><button class="copy" type="button">复制</button></div><pre>ffplay -rtsp_transport tcp -fflags nobuffer -flags low_delay -framedrop rtsp://192.168.2.221:8554/imx415</pre></div>
+    <p class="muted"><code>ffplay</code> 播放视频；<code>-rtsp_transport tcp</code> 用 TCP 传输，<code>-fflags nobuffer</code> 减少输入缓存，<code>-flags low_delay</code> 请求低延迟解码，<code>-framedrop</code> 在显示落后时丢弃显示帧。地址是板端 IP、8554 端口和 <code>/imx415</code> 路径。加入时可能需要等待下一个关键帧。若板子 IP 变化，板端 <code>hostname -I</code> 可查询新地址。</p>
+    <div class="note ok"><b>完整使用入口：</b><a href="docs/FFmpeg_全链路操作指南.html">FFmpeg 构建、启动、录像、截图与故障处理</a> · <a href="docs/FFmpeg_全链路验收记录.html">实际验收数据</a> · <a href="docs/Windows_上位机设计与开源调研.html">Windows 上位机设计与开源调研</a>。手动录像通过 <code>record-start / record-stop</code> 控制，读取已编码 RTSP 并复制封装 MP4；不会增加第二次编码。桌面软件本轮交付设计，下一阶段开发。</div>
   </div>
 </section>
 
@@ -321,7 +325,7 @@ DISPLAY=:0 bash 07_h265_preview_tcp.sh</pre></div>
       <span class="tag t-green">NV12 采集、H.265 TCP 管线已验证</span>
       <span class="tag t-violet">文档更新：2026-10-12</span>
     </div>
-    <div class="note info"><b>当前状态：</b>IMX415 已接 con7；板端 <code>/dev/video44</code> 的 NV12 采集 60 帧已成功结束（退出码 0）。现有管线已配置 HDMI 预览和 H.265 TCP 5000，电脑连接曾由 <code>ss</code> 确认。当前瞬时状态请看上方带采样时间的卡片。</div>
+    <div class="note info"><b>当前主链路：</b>IMX415/con7 → 双平面 NV12M → 独立 FFmpeg → RK3588 VPU H.265 → MediaMTX RTSP 8554；HDMI、电脑和按需 MP4 录像均订阅同一条码流。旧 GStreamer/TCP 5000 为保留方案；不应同时打开同一个摄像头节点。</div>
 
     <div class="quick-step card">
       <h3>1. 解压代码包，确认目录结构</h3>
@@ -336,7 +340,7 @@ Expand-Archive -LiteralPath '.\EVM3588-B_音视频代码包.zip' -DestinationPat
 Set-Location -LiteralPath $extractDir
 Get-ChildItem
 Get-ChildItem -LiteralPath '.\board'</pre></div>
-      <p>进入含有 <code>deploy.ps1</code> 的目录执行后续电脑端命令。更新后的 ZIP 包含代码、方案网页、路线二手册和状态采样工具；厂商 SDK、本地备份及真实运行状态未打包。</p>
+      <p>进入含有 <code>deploy.ps1</code> 的目录执行后续电脑端命令。更新后的 ZIP 包含独立 FFmpeg 构建与控制源码、NV12M 补丁、方案网页、完整手册和状态采样工具；厂商 SDK、本地备份及真实运行状态未打包。</p>
       <div class="codewrap"><pre class="quick-tree">代码包根目录/
 ├── deploy.ps1                     Windows 部署入口
 ├── README.txt                     简要使用说明
@@ -513,7 +517,7 @@ PC_IP=192.168.2.165
 bash 04_cam_stream.sh udp "$PC_IP" "$CAM_NODE" h265 1920x1080</pre></div>
         <p>电脑运行 <code>ipconfig</code> 查看与板子互通的网卡 IPv4 地址。先在 VLC 打开 <code>udp://@:5000</code>，再启动推流；若收不到画面，检查网络互通及 Windows 防火墙的 UDP 5000 放行设置。</p>
       </details>
-      <div class="note info"><b>按故障环节排查：</b>不识别 IMX415 → 查接口、排线和固件配置；识别但采集超时 → 查 ISP / 3A 与采集节点；NV12 采集正常但录制失败 → 查 MPP 插件、格式协商与日志。当前已用一条 <code>tee</code> 管线同时预览和推流；其他采集测试需等这条管线结束后再运行。</div>
+      <div class="note info"><b>按故障环节排查：</b>不识别 IMX415 → 查接口、排线和固件配置；识别但采集超时 → 查 ISP / 3A 与采集节点；采集正常但编码失败 → 查硬编能力与日志。当前 FFmpeg 独占采集，其他摄像头测试先通过 <code>avctl.py stop</code> 释放设备，结束后恢复直播。</div>
     </div>
   </div>
 </section>
@@ -613,15 +617,15 @@ bash 04_cam_stream.sh udp "$PC_IP" "$CAM_NODE" h265 1920x1080</pre></div>
       <div class="card" style="border-top:3px solid var(--violet)">
         <span class="tag t-violet">路线三 · 进阶</span>
         <h3 class="sub" style="margin-top:12px">ffmpeg / rockit</h3>
-        <p class="muted" style="margin-bottom:12px">多路图与封装/协议生态的后续方向。当前板端 FFmpeg 编码器列表没有 rkmpp，系统头文件/库目录未发现 Rockit 开发组件，需先准备与固件匹配的工具链和库。</p>
+        <p class="muted" style="margin-bottom:12px">新增独立 FFmpeg 环境，已提供 <code>hevc_rkmpp / h264_rkmpp</code> 编码器；H.265 通过 VPU 硬编并发布 RTSP，可同时在 HDMI 与电脑播放、按需录制 MP4。系统原 FFmpeg 和 MPP 运行库保留。Rockit 仍为后续多路图方向。</p>
         <ul class="tick">
           <li><b>优点：</b>生态丰富、多路图、容器/协议全</li>
           <li><b>适合：</b>成熟产品、需要 ffmpeg 滤镜生态</li>
-          <li><b>代价：</b>需核对 SDK/固件版本并自行构建、部署、验证，复杂度高；现有 <code>libx265</code> 是软件编码器，不能据此认定已启用 MPP 硬编</li>
+          <li><b>构建依据：</b>固定 FFmpeg/MPP/RGA 源码提交、NV12M 兼容补丁和 MediaMTX 校验值；新库只对独立 FFmpeg 生效</li>
         </ul>
       </div>
     </div>
-    <div class="note ok"><b>当前实测：</b>07 脚本已让 HDMI 与电脑 ffplay 同时显示 IMX415 实时画面。路线二两个 C 程序已在板端编译；离线 NV12 测试输出 30 帧 640×360 HEVC，摄像头采集输出 60 帧 1920×1080 HEVC，均经 ffprobe 逐帧检查。C 程序目前只输出文件，测试摄像头时须短暂停止 07 主链路，结束后再恢复。</div>
+    <div class="note ok"><b>实测入口：</b>当前 FFmpeg / RTSP 两端画面已由用户确认，录像、截图和恢复指标见 <a href="docs/FFmpeg_全链路验收记录.html">完整验收记录</a>。路线二 C 程序仍保留，离线输出 30 帧 640×360 HEVC、摄像头输出 60 帧 1920×1080 HEVC，均经 ffprobe 检查。C 程序输出文件，摄像头测试须先暂停当前 FFmpeg 主链路，结束后再恢复。</div>
   </div>
 </section>
 
@@ -763,7 +767,7 @@ Hardware          VENC 硬件编码电路</pre>
             </tbody>
           </table>
         </div>
-        <p class="muted" style="margin-top:10px">本项目当前主链路选择 <b>H.265</b>，由 <code>mpph265enc</code> 硬编并以 TCP 裸流送到电脑；H.264 / MJPEG 保留为历史示例和兼容性参考。</p>
+        <p class="muted" style="margin-top:10px">当前主链路选择 <b>H.265</b>，由 <code>hevc_rkmpp</code> 硬编，通过 RTSP TCP 分发。H.264 已提供配置入口，完整实测仍以 H.265 为准；旧 GStreamer 示例保留。</p>
       </div>
 
       <div class="card">
@@ -1164,7 +1168,10 @@ ioctl(fd, VIDIOC_QBUF, &b);</pre></div>
       <p>代码包已解压到当前工作目录。先按 <a href="#start">解压与部署</a> 将 <code>board/</code> 内容推送到板端 <code>/userdata/av_dev/</code>，再逐项验证。</p>
     </div>
     <div class="card">
-      <div class="fileitem"><span class="fico">deploy</span><div><div class="fnm">deploy.ps1</div><div class="fd">电脑端逐个推送代码并检查结果；C 编译需显式加 -BuildExamples</div></div></div>
+      <div class="fileitem"><span class="fico">FFmpeg</span><div><div class="fnm">ffmpeg_pipeline/build_runtime.sh / versions.json / patches/</div><div class="fd">锁定 FFmpeg、MPP、RGA 与 MediaMTX，四任务板端编译，修复 NV12M 平面、偏移与 stride；私有运行库</div></div></div>
+      <div class="fileitem"><span class="fico">control</span><div><div class="fnm">ffmpeg_pipeline/avctl.py / install_services.sh / mediamtx.yml</div><div class="fd">JSON 控制、实际状态、HDMI、MP4 封口、JPEG、日志与恢复；systemd 管理，未设置开机自启</div></div></div>
+      <div class="fileitem"><span class="fico">tests</span><div><div class="fnm">ffmpeg_pipeline/tests/ / docs/</div><div class="fd">NV12M 与控制测试、十次启停、RTSP 重启、30 分钟采样；完整指南、验收数据和上位机设计</div></div></div>
+      <div class="fileitem"><span class="fico">deploy</span><div><div class="fnm">deploy.ps1</div><div class="fd">电脑端逐个推送代码并检查结果；不自动切换直播或编译 FFmpeg；C 编译需显式加 -BuildExamples</div></div></div>
       <div class="fileitem"><span class="fico">step 0</span><div><div class="fnm">00_env_check.sh</div><div class="fd">环境自检：MPP 节点/库、GStreamer rockchip 插件、V4L2、RGA、音频，并给出缺失安装命令</div></div></div>
       <div class="fileitem"><span class="fico">step 1</span><div><div class="fnm">01_mpp_selftest.sh</div><div class="fd">MPP 彩条硬编自测（无需摄像头）：H.264/H.265/JPEG + 4K 压测，打印 fps/码率</div></div></div>
       <div class="fileitem"><span class="fico">step 2</span><div><div class="fnm">02_gst_encode_selftest.sh</div><div class="fd">GStreamer 测试图案硬编（无需摄像头）：1080p/4K → MP4/TS，吞吐统计</div></div></div>
@@ -1215,7 +1222,7 @@ ioctl(fd, VIDIOC_QBUF, &b);</pre></div>
         <p class="muted">开 performance 调速；确认走的是硬编（top 中 CPU 应很低）；缩到 1080p 用 RGA；4K60 官方不保证，按 30fps 设计；必要时上 dma-buf 零拷贝。</p>
       </div>
     </div>
-    <div class="note info" style="margin-top:20px"><b>当前进度：</b>IMX415 /dev/video44 NV12 的 60 帧采集成功，H.265 TCP 管线与电脑连接已观察到。后续重点是长时间稳定性、掉帧、端到端延迟与码率实测；网页快照只显示采样时刻的进程/连接状态。</div>
+    <div class="note info" style="margin-top:20px"><b>当前进度：</b>FFmpeg 直接采集 → VPU H.265 → RTSP → 两端播放、MP4 和截图已跑通；持续测试数据见验收记录。Windows 上位机已完成设计，下一阶段开发。网页展示带时间的状态快照；镜头到屏幕的端到端延迟仍待专门测量。</div>
   </div>
 </section>
 
@@ -1249,10 +1256,15 @@ ioctl(fd, VIDIOC_QBUF, &b);</pre></div>
       el.textContent=good?yes:no;
     }
     set('status-adb',!!s.adbSerial,'已连接','未连接');
-    set('status-camera',!!s.cameraOwnedByListener,'由推流进程占用','未确认占用');
-    set('status-encoder',!!s.h265Pipeline && !!s.portListening,'H.265 已监听'+(s.listenerPid?' · PID '+s.listenerPid:''),'未检测到管线');
-    set('status-preview',!!s.previewBranchConfigured,'预览分支已配置','未检测到分支');
-    set('status-client',!!s.tcpClientConnected,'客户端已连接','暂无连接');
+    var ff=s.pipelineType==='ffmpeg';
+    document.getElementById('status-encoder-label').textContent=ff?'FFmpeg H.265 / RTSP 8554':'GStreamer H.265 / TCP 5000';
+    set('status-camera',!!s.cameraOwnedByListener,'由编码器占用','未确认占用');
+    set('status-encoder',!!s.h265Pipeline && !!s.portListening && (!ff || !!s.streamReady),ff?'hevc_rkmpp 正在发布':'H.265 已监听','未检测到活动码流');
+    set('status-preview',!!s.previewBranchConfigured,ff?'HDMI 播放器运行':'预览分支已配置','预览未运行');
+    set('status-client',!!s.tcpClientConnected,'远程客户端已连接','暂无远程连接');
+    set('status-vpu',ff && !!s.hardwareDeviceOpen, '/dev/mpp_service 已打开',ff?'未检测到设备访问':'原管线不采集此项');
+    set('status-fps',ff && Number(s.fps)>0,Number(s.fps).toFixed(1)+' fps · '+String(s.frame || 0)+' 帧',ff?'暂无帧进度':'原管线不采集此项');
+    set('status-record',ff, s.recording?'正在录制 MP4':'未录像 · 可按需开始','原管线不采集此项');
   }
   render();
   setInterval(render,30000);

@@ -1,0 +1,9 @@
+{
+  "device": "/dev/video44",
+  "codec": "h265",
+  "width": 1920,
+  "height": 1080,
+  "fps": 30,
+  "bitrate": 2500000,
+  "gop": 30
+}
