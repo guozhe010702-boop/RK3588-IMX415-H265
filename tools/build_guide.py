@@ -5,6 +5,7 @@ Build dependency: markdown-it-py (already available in this workspace).
 from html import escape
 from pathlib import Path
 from markdown_it import MarkdownIt
+from urllib.parse import unquote
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -26,6 +27,16 @@ img{max-width:100%;height:auto}
 <div class="layout"><nav><strong>操作与学习目录</strong>TOC</nav><main>ARTICLE</main></div></body></html>'''
 def generate(source):
     tokens=parser.parse(source.read_text(encoding='utf-8'))
+    # Markdown remains the source. Local HTML pages navigate to generated guides.
+    for token in tokens:
+        for child in token.children or []:
+            if child.type != 'link_open': continue
+            href=child.attrGet('href') or ''
+            path,separator,fragment=href.partition('#')
+            if '://' in path or not path.endswith('.md'): continue
+            target=(source.parent/unquote(path)).resolve()
+            if target.parent == ROOT/'docs' and target.is_file():
+                child.attrSet('href',path[:-3]+'.html'+(separator+fragment if separator else ''))
     toc=[]; headings=0; title='EVM3588 操作指南'
     for index,token in enumerate(tokens):
         if token.type=='heading_open':

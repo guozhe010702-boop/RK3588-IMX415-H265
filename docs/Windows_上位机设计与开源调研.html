@@ -12,7 +12,7 @@ main{min-width:0;background:white;border:1px solid var(--line);border-radius:12p
 img{max-width:100%;height:auto}
 </style></head><body><header><a href="../EVM3588-B_音视频实时压缩方案.html">← 返回方案网页</a><p>EVM3588-B · IMX415/con7 · FFmpeg / MPP · 操作与设计文档</p></header>
 <div class="layout"><nav><strong>操作与学习目录</strong><a href="#section-2">1. 技术选择与开源参考</a><a href="#section-3">2. 模块与线程安排</a><a href="#section-4">3. 五个界面</a><a href="#section-5">4. 已实现控制协议</a><a href="#section-6">5. 文件与凭据</a><a href="#section-7">6. 参数与相机能力边界</a><a href="#section-8">7. 首版实现与后续扩展</a></nav><main><h1 id="section-1">Windows 上位机设计与开源调研</h1>
-<p>本文记录架构设计与开源参考，调研日期：2026-10-13。Windows 桌面程序 1.0.0 已实现，入口为 <code>desktop/</code>；实际使用见 <a href="Windows_%E7%9B%B8%E6%9C%BA%E6%8E%A7%E5%88%B6%E5%8F%B0%E6%93%8D%E4%BD%9C%E6%8C%87%E5%8D%97.md">桌面操作指南</a>，验证范围见 <a href="Windows_%E7%9B%B8%E6%9C%BA%E6%8E%A7%E5%88%B6%E5%8F%B0%E9%AA%8C%E6%94%B6%E8%AE%B0%E5%BD%95.md">桌面验收记录</a>。</p>
+<p>本文记录架构设计与开源参考，调研日期：2026-10-13。Windows 桌面程序 1.0.0 已实现，入口为 <code>desktop/</code>；实际使用见 <a href="Windows_%E7%9B%B8%E6%9C%BA%E6%8E%A7%E5%88%B6%E5%8F%B0%E6%93%8D%E4%BD%9C%E6%8C%87%E5%8D%97.html">桌面操作指南</a>，验证范围见 <a href="Windows_%E7%9B%B8%E6%9C%BA%E6%8E%A7%E5%88%B6%E5%8F%B0%E9%AA%8C%E6%94%B6%E8%AE%B0%E5%BD%95.html">桌面验收记录</a>。</p>
 <h2 id="section-2">1. 技术选择与开源参考</h2>
 <p>采用 Windows + PySide6 界面、Paramiko SSH/SFTP 控制、独立 FFmpeg 解码进程。视频经 RTSP 传输，SSH 只传控制与状态，SFTP 下载文件。</p>
 <table>
