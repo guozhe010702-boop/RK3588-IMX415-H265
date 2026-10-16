@@ -1,0 +1,1318 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EVM3588-B 摄像头视频流实时硬件压缩 · 音视频开发方案</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><rect width='24' height='24' rx='4' fill='%230d1620'/><path d='M4 8h4l2-2h4l2 2h4v10H4z' fill='none' stroke='%230e9bb0' stroke-width='1.6'/><circle cx='12' cy='13' r='3' fill='none' stroke='%23d98a2b' stroke-width='1.6'/></svg>">
+<style>
+:root{
+  --ink:#16202b; --ink2:#3c4a5a; --mut:#6b7888;
+  --paper:#f4f6f8; --panel:#ffffff; --slate:#0d1620; --slate2:#14202e;
+  --cyan:#0e9bb0; --cyan-d:#0a7282; --cyan-bg:#e3f4f6;
+  --amber:#d0842a; --amber-bg:#faf0df;
+  --violet:#6d7fd6; --violet-bg:#eceffa;
+  --green:#35915f; --green-bg:#e4f2ea;
+  --red:#c0563f; --line:#dbe1e8; --line2:#263445;
+  --mono:'JetBrains Mono',Consolas,'Courier New',monospace;
+  --sans:'Noto Sans SC',system-ui,-apple-system,'Segoe UI',sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth;scroll-padding-top:76px}
+body{font-family:var(--sans);color:var(--ink);background:var(--paper);line-height:1.7;font-size:15.5px;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1180px;margin:0 auto;padding:0 28px}
+code,pre,.mono{font-family:var(--mono)}
+a{color:var(--cyan-d);text-decoration:none}
+a:hover{text-decoration:underline}
+button:focus-visible,a:focus-visible{outline:3px solid var(--amber);outline-offset:3px}
+.hero-actions{display:flex;gap:12px;flex-wrap:wrap;margin-top:24px}
+.action{display:inline-block;border-radius:8px;padding:10px 18px;font-size:14px;font-weight:700;border:1px solid #405467;color:#dce8f2}
+.action.primary{background:var(--cyan);border-color:var(--cyan);color:#fff}
+.action:hover{text-decoration:none;border-color:var(--cyan)}
+.quick-status{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:20px}
+.quick-step{margin-top:22px}
+.quick-step h3{font-size:18px;margin-bottom:8px}
+.quick-step p{color:var(--ink2);font-size:14px}
+.quick-step .codebar .fn{overflow-wrap:anywhere;min-width:0}
+.quick-step .codebar .copy{flex-shrink:0}
+.quick-tree{font-size:12.5px;white-space:pre}
+.fileitem .fnm{overflow-wrap:anywhere}
+.runtime-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:16px 0}
+.runtime-item{border:1px solid var(--line);border-radius:10px;padding:14px;background:#fff}
+.runtime-item .label{font-size:12px;color:var(--mut)}
+.runtime-item .value{font-weight:700;margin-top:5px;overflow-wrap:anywhere}
+.runtime-item.good .value{color:var(--green)}
+.runtime-item.bad .value{color:var(--red)}
+.runtime-item.unknown .value{color:var(--mut)}
+@media(max-width:860px){.runtime-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+/* ---------- 顶部导航 ---------- */
+header.nav{position:sticky;top:0;z-index:50;background:rgba(13,22,32,.92);backdrop-filter:blur(8px);border-bottom:1px solid var(--line2)}
+.nav-in{max-width:1180px;margin:0 auto;padding:0 28px;display:flex;align-items:center;gap:22px;height:56px}
+.brand{color:#fff;font-weight:700;font-size:15px;letter-spacing:.5px;white-space:nowrap;display:flex;align-items:center;gap:9px}
+.brand .dot{width:9px;height:9px;background:var(--amber);border-radius:2px;box-shadow:0 0 0 3px rgba(208,132,42,.25)}
+.nav-links{display:flex;gap:4px;overflow-x:auto;scrollbar-width:none;min-width:0}
+.nav-links::-webkit-scrollbar{display:none}
+.nav-links a{color:#aebdcc;font-size:13.5px;padding:7px 11px;border-radius:6px;white-space:nowrap;transition:.15s}
+.nav-links a:hover{color:#fff;background:rgba(255,255,255,.08)}
+.nav-tag{margin-left:auto;color:#7d8ea0;font-size:12px;font-family:var(--mono);white-space:nowrap}
+
+/* ---------- HERO ---------- */
+.hero{background:radial-gradient(1200px 500px at 70% -10%,#1b3043 0%,var(--slate) 55%);color:#e8eef4;padding:64px 0 54px;border-bottom:1px solid var(--line2);position:relative;overflow:hidden}
+.hero::after{content:"";position:absolute;inset:0;background-image:linear-gradient(rgba(255,255,255,.025) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.025) 1px,transparent 1px);background-size:34px 34px;pointer-events:none}
+.hero .wrap{position:relative;z-index:1}
+.kicker{font-family:var(--mono);font-size:12.5px;letter-spacing:2px;color:var(--cyan);text-transform:uppercase;margin-bottom:18px;display:flex;align-items:center;gap:10px}
+.kicker::before{content:"";width:26px;height:1px;background:var(--cyan)}
+.hero h1{font-size:39px;font-weight:900;line-height:1.25;letter-spacing:.5px;margin-bottom:16px}
+.hero h1 em{font-style:normal;color:var(--amber)}
+.hero p.lead{font-size:16.5px;color:#b7c5d3;max-width:760px;font-weight:300}
+.hero-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-top:38px;max-width:880px}
+.hstat{background:rgba(255,255,255,.045);border:1px solid var(--line2);border-radius:10px;padding:15px 17px}
+.hstat .n{font-family:var(--mono);font-size:23px;font-weight:700;color:#fff;letter-spacing:.5px}
+.hstat .n .u{font-size:13px;color:var(--cyan);font-weight:500;margin-left:2px}
+.hstat .l{font-size:12.5px;color:#93a4b5;margin-top:3px}
+.hero-meta{margin-top:26px;display:flex;flex-wrap:wrap;gap:9px}
+.chip{font-family:var(--mono);font-size:12px;padding:5px 11px;border-radius:20px;border:1px solid var(--line2);color:#b9c7d5;background:rgba(255,255,255,.03)}
+
+/* ---------- 区块 ---------- */
+section{padding:58px 0}
+.sec-head{margin-bottom:30px;max-width:820px}
+.sec-no{font-family:var(--mono);color:var(--cyan-d);font-size:13px;font-weight:700;letter-spacing:1px}
+.sec-head h2{font-size:27px;font-weight:800;margin:7px 0 10px;letter-spacing:.3px}
+.sec-head p{color:var(--ink2);font-size:15px}
+section.alt{background:var(--panel);border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:24px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+.grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
+.grid2>*,.grid3>*,.grid4>*{min-width:0}
+h3.sub{font-size:17px;font-weight:700;margin:0 0 12px;display:flex;align-items:center;gap:9px}
+h3.sub::before{content:"";width:4px;height:16px;background:var(--amber);border-radius:2px}
+.muted{color:var(--mut);font-size:13.5px}
+.tag{display:inline-block;font-family:var(--mono);font-size:11px;padding:2px 8px;border-radius:5px;font-weight:500}
+.t-cyan{background:var(--cyan-bg);color:var(--cyan-d)}
+.t-amber{background:var(--amber-bg);color:var(--amber)}
+.t-violet{background:var(--violet-bg);color:var(--violet)}
+.t-green{background:var(--green-bg);color:var(--green)}
+
+/* ---------- 管线架构图 ---------- */
+.pipeline{background:var(--slate);border-radius:14px;padding:30px 24px;border:1px solid var(--line2)}
+.pl-row{display:flex;align-items:stretch;gap:0;flex-wrap:wrap;justify-content:center}
+.pl-node{border-radius:10px;padding:14px 12px;min-width:128px;text-align:center;position:relative;flex:1;max-width:158px;border:1px solid}
+.pl-node .ico{font-family:var(--mono);font-size:11px;letter-spacing:1px;opacity:.8;margin-bottom:6px}
+.pl-node .tt{font-size:14px;font-weight:700;color:#fff}
+.pl-node .dd{font-family:var(--mono);font-size:10.5px;color:#9fb0c0;margin-top:5px;line-height:1.45}
+.n-sensor{background:rgba(14,155,176,.14);border-color:var(--cyan)}
+.n-isp{background:rgba(58,120,180,.16);border-color:#4d8fc9}
+.n-rga{background:rgba(109,127,214,.15);border-color:var(--violet)}
+.n-venc{background:rgba(208,132,42,.2);border-color:var(--amber);box-shadow:0 0 0 1px rgba(208,132,42,.3),0 0 28px rgba(208,132,42,.18)}
+.n-out{background:rgba(53,145,95,.16);border-color:var(--green)}
+.pl-arrow{display:flex;align-items:center;justify-content:center;width:34px;color:#5f7185;flex:0 0 34px;font-size:19px}
+.pl-data{font-family:var(--mono);font-size:10px;color:#7e90a2;text-align:center;padding-top:6px}
+.pl-audiorow{margin-top:20px;display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap;border-top:1px dashed var(--line2);padding-top:18px}
+.pl-audiorow .lab{font-family:var(--mono);font-size:11px;color:var(--violet)}
+.pl-chip{font-family:var(--mono);font-size:11px;color:#c6d2de;border:1px solid var(--line2);border-radius:6px;padding:6px 11px;background:rgba(255,255,255,.03)}
+.pl-legend{display:flex;gap:20px;justify-content:center;flex-wrap:wrap;margin-top:22px;font-size:12px;color:#9fb0c0}
+.pl-legend span{display:flex;align-items:center;gap:7px}
+.pl-legend i{width:11px;height:11px;border-radius:3px;display:inline-block}
+.pl-note{margin-top:18px;background:rgba(14,155,176,.08);border:1px solid rgba(14,155,176,.3);border-radius:8px;padding:12px 15px;font-size:13px;color:#b7c9d4;font-family:var(--mono);line-height:1.7}
+
+/* ---------- 表格 ---------- */
+table{width:100%;border-collapse:collapse;font-size:13.8px;background:var(--panel)}
+.tbl{border:1px solid var(--line);border-radius:10px;overflow-x:auto;overflow-y:hidden}
+.tbl table{min-width:520px}
+th,td{padding:11px 13px;text-align:left;border-bottom:1px solid var(--line);vertical-align:top}
+th{background:#eef2f6;font-weight:700;font-size:13px;color:var(--ink)}
+tr:last-child td{border-bottom:none}
+td code,.inline{font-family:var(--mono);font-size:12.3px;background:#eef2f6;padding:1.5px 6px;border-radius:4px;color:var(--cyan-d)}
+p code,li code,h3 code,h4 code,.note code{font-family:var(--mono);font-size:.88em;background:#eef2f6;padding:1px 5px;border-radius:4px;color:var(--cyan-d);overflow-wrap:anywhere;word-break:break-word;white-space:normal}
+table.fixed th,table.fixed td{table-layout:fixed}
+
+/* ---------- 代码 ---------- */
+.codewrap{background:var(--slate);border-radius:11px;overflow-x:auto;overflow-y:hidden;border:1px solid var(--line2);margin:14px 0}
+.codebar{display:flex;align-items:center;gap:8px;padding:9px 14px;background:var(--slate2);border-bottom:1px solid var(--line2)}
+.codebar .b{width:10px;height:10px;border-radius:50%}
+.codebar .b1{background:#e0654f}.codebar .b2{background:#e0b34f}.codebar .b3{background:#57b871}
+.codebar .fn{font-family:var(--mono);font-size:12px;color:#9fb0c0;margin-left:6px}
+.codebar .copy{margin-left:auto;font-family:var(--mono);font-size:11px;color:#7d8ea0;border:1px solid var(--line2);padding:3px 10px;border-radius:5px;cursor:pointer;background:none}
+.codebar .copy:hover{color:#fff;border-color:#3a4a5d}
+pre{padding:16px 18px;overflow-x:auto;font-family:var(--mono);font-size:12.7px;line-height:1.66;color:#d3deea}
+pre .cm{color:#6f8296;font-style:italic}
+pre .kw{color:#7fc7d6}
+pre .hl{color:#e8b066}
+pre .st{color:#9ecb8f}
+pre .pn{color:#d98bd0}
+
+/* tabs */
+.tabs{display:flex;gap:4px;margin-bottom:0;flex-wrap:wrap}
+.tab-btn{font-family:var(--mono);font-size:12.5px;padding:9px 16px;border:1px solid var(--line);border-bottom:none;background:#eef2f6;border-radius:8px 8px 0 0;cursor:pointer;color:var(--mut)}
+.tab-btn.active{background:var(--slate);color:#fff;border-color:var(--slate)}
+.tab-pane{display:none}
+.tab-pane.active{display:block}
+
+/* ---------- 时间轴路线 ---------- */
+.phase{display:grid;grid-template-columns:64px 1fr;gap:0;position:relative}
+.phase-rail{position:relative;display:flex;justify-content:center}
+.phase-dot{width:38px;height:38px;border-radius:9px;background:var(--panel);border:2px solid var(--cyan);color:var(--cyan-d);font-family:var(--mono);font-weight:700;font-size:14px;display:flex;align-items:center;justify-content:center;z-index:2;box-shadow:0 0 0 5px var(--paper)}
+.phase-line{position:absolute;top:38px;bottom:-30px;width:2px;background:var(--line)}
+.phase:last-child .phase-line{display:none}
+.phase-body{padding-bottom:32px;min-width:0}
+.phase-body h4{font-size:16.5px;font-weight:700;margin-bottom:2px}
+.phase-body .when{font-family:var(--mono);font-size:11.5px;color:var(--mut);margin-bottom:10px}
+.phase-body .pc{background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:18px 20px}
+.need{background:var(--amber-bg);border-left:3px solid var(--amber);border-radius:0 7px 7px 0;padding:9px 13px;font-size:13px;color:#7a5418;margin-top:12px}
+.okline{color:var(--green);font-size:13px;margin-top:10px;font-weight:500}
+
+/* callout */
+.note{border-radius:9px;padding:14px 17px;font-size:13.8px;margin:14px 0;line-height:1.7}
+.note b{font-weight:700}
+.note.info{background:var(--cyan-bg);border:1px solid #bfe4e9;color:#0c5560}
+.note.warn{background:#fbeee7;border:1px solid #f0cdb8;color:#8a4426}
+.note.ok{background:var(--green-bg);border:1px solid #c4e3d1;color:#1e5e3a}
+
+ul.tick{list-style:none;padding:0}
+ul.tick li{padding:5px 0 5px 24px;position:relative;font-size:14px;color:var(--ink2)}
+ul.tick li::before{content:"";position:absolute;left:3px;top:12px;width:7px;height:7px;border-right:2px solid var(--cyan);border-bottom:2px solid var(--cyan);transform:rotate(45deg)}
+ul.tick li b{color:var(--ink)}
+
+/* file list */
+.fileitem{display:flex;gap:13px;align-items:flex-start;padding:11px 0;border-bottom:1px dashed var(--line)}
+.fileitem:last-child{border-bottom:none}
+.fileitem .fico{font-family:var(--mono);font-size:11px;background:var(--slate);color:var(--cyan);padding:4px 8px;border-radius:5px;white-space:nowrap;margin-top:2px}
+.fileitem .fnm{font-family:var(--mono);font-size:13px;font-weight:700;color:var(--ink)}
+.fileitem .fd{font-size:13px;color:var(--mut)}
+
+/* 码率对比条 */
+.bar-row{display:grid;grid-template-columns:170px 1fr;align-items:center;gap:14px;margin:9px 0}
+.bar-lab{font-size:13px;color:var(--ink2);text-align:right;font-weight:500}
+.bar-track{background:#eef2f6;border-radius:6px;height:30px;overflow:hidden;display:flex;align-items:center}
+.bar-fill{height:100%;border-radius:6px;display:flex;align-items:center;min-width:120px;transition:width .6s}
+.bar-fill span{font-family:var(--mono);font-size:12px;color:#fff;padding-left:12px;white-space:nowrap;font-weight:600}
+.bar-fill.raw{background:linear-gradient(90deg,#8a98a8,#6b7888)}
+.bar-fill.h264{background:linear-gradient(90deg,#d99a45,var(--amber))}
+.bar-fill.h265{background:linear-gradient(90deg,#c2761f,#a85f12)}
+/* GOP */
+.gop{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end}
+.gop-frame{width:54px;height:64px;border-radius:8px;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#fff;font-weight:700;font-family:var(--mono)}
+.gop-frame small{font-size:9.5px;font-weight:400;opacity:.85;margin-top:3px;font-family:var(--sans)}
+.gop-frame.I{background:var(--amber);height:74px}
+.gop-frame.P{background:#5a86b5;height:54px}
+.gop-note{background:#f7f9fb;border:1px solid var(--line);border-radius:8px;padding:12px 14px;font-size:13px}
+.gop-note .muted{display:block;margin-top:4px;line-height:1.55}
+@media(max-width:860px){.bar-row{grid-template-columns:1fr}.bar-lab{text-align:left}}
+
+footer{background:var(--slate);color:#8fa0b1;padding:34px 0;font-size:13px;border-top:1px solid var(--line2)}
+footer .mono{color:#b9c7d5;font-size:12px}
+
+@media(max-width:860px){
+  .hero h1{font-size:28px}.hero-stats{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .hstat{min-width:0}.hstat .n{font-size:19px;overflow-wrap:anywhere}
+  .grid2,.grid3,.grid4{grid-template-columns:1fr}
+  .pl-arrow{transform:rotate(90deg);width:100%;height:26px;flex-basis:100%}
+  .pl-node{max-width:none}
+  .nav-tag{display:none}
+}
+</style>
+</head>
+<body>
+
+<header class="nav">
+  <div class="nav-in">
+    <div class="brand"><span class="dot"></span>EVM3588-B 音视频方案</div>
+    <nav class="nav-links">
+      <a href="#start">解压与部署</a>
+      <a href="#runtime">运行状态</a>
+      <a href="#camera-start">IMX415 验证</a>
+      <a href="#goal">目标</a>
+      <a href="#hw">硬件能力</a>
+      <a href="#stack">技术选型</a>
+      <a href="#arch">数据链路</a>
+      <a href="#codec">压缩算法</a>
+      <a href="#roadmap">实施路线</a>
+      <a href="#code">代码实现</a>
+      <a href="#avnet">音频推流</a>
+      <a href="#perf">性能优化</a>
+      <a href="#files">交付清单</a>
+      <a href="#faq">FAQ</a>
+    </nav>
+    <span class="nav-tag">RK3588 · IMX415 · H.265</span>
+  </div>
+</header>
+
+<!-- ===== HERO ===== -->
+<div class="hero">
+  <div class="wrap">
+    <div class="kicker">RK3588 嵌入式音视频 · 实时硬件编码方案</div>
+    <h1>摄像头源数据采集 → 硬件处理 → <em>实时视频流压缩</em><br>端到端落地方案</h1>
+    <p class="lead">当前主链路已跑通：con7 的 IMX415 经 <code>/dev/video44</code> 双平面 NV12M 采集，由独立 FFmpeg 调用 RK3588 VPU 进行 H.265 硬编；MediaMTX RTSP 同时供 HDMI 与电脑播放，支持手动 MP4 录像、JPEG 截图和实际运行统计。</p>
+    <div class="hero-actions">
+      <a class="action primary" href="../docs/architecture/项目程序逻辑与目录导航.md">先看程序逻辑与目录 →</a>
+      <a class="action" href="../docs/guides/Windows_相机控制台操作指南.md">使用 Windows 桌面控制台 →</a>
+      <a class="action" href="../releases/EVM3588CameraConsole-Windows-x64-v1.1.0.zip" download>下载本地 1.1.0 EXE</a>
+      <a class="action" href="#start">查看解压与部署</a>
+      <a class="action" href="../releases/av_dev-source.zip" download>下载本地代码包</a>
+      <a class="action" href="../README.md">查看 README</a>
+    </div>
+    <div class="hero-stats">
+      <div class="hstat"><div class="n">4K<span class="u">@30</span></div><div class="l">目标规格 · 板端吞吐待实测</div></div>
+      <div class="hstat"><div class="n">H.265</div><div class="l">当前主链路 · MPP 硬件编码</div></div>
+      <div class="hstat"><div class="n">2<span class="u">端</span></div><div class="l">板端 HDMI + 电脑 ffplay</div></div>
+      <div class="hstat"><div class="n">dma-buf</div><div class="l">进阶方向 · 当前 C 示例使用拷贝</div></div>
+    </div>
+    <div class="hero-meta">
+      <span class="chip">Ubuntu 20.04 · kernel 5.10.110</span>
+      <span class="chip">MPP / MPI</span>
+      <span class="chip">GStreamer rockchip</span>
+      <span class="chip">V4L2</span>
+      <span class="chip">RGA 2D</span>
+      <span class="chip">ALSA / es8388</span>
+      <span class="chip">FFmpeg · H.265 / RTSP 8554</span>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 当前板端状态与主链路 ===== -->
+<section id="runtime">
+  <div class="wrap">
+    <div class="sec-head">
+      <div class="sec-no">CURRENT PIPELINE / 运行状态</div>
+      <h2>IMX415 → FFmpeg / VPU → RTSP · HDMI · MP4</h2>
+      <p>下面显示最近一次 ADB 只读采样。页面直接以 <code>file://</code> 打开，浏览器不会自行连接开发板；运行刷新脚本后重新加载页面。</p>
+    </div>
+    <div class="runtime-grid" aria-label="板端状态快照">
+      <div class="runtime-item unknown"><div class="label">ADB 设备</div><div class="value" id="status-adb">读取中</div></div>
+      <div class="runtime-item unknown"><div class="label">IMX415 / video44</div><div class="value" id="status-camera">读取中</div></div>
+      <div class="runtime-item unknown"><div class="label" id="status-encoder-label">H.265 / RTSP 8554</div><div class="value" id="status-encoder">读取中</div></div>
+      <div class="runtime-item unknown"><div class="label">HDMI 预览分支</div><div class="value" id="status-preview">读取中</div></div>
+      <div class="runtime-item unknown"><div class="label">远程播放客户端</div><div class="value" id="status-client">读取中</div></div>
+      <div class="runtime-item unknown"><div class="label">VPU 设备访问</div><div class="value" id="status-vpu">读取中</div></div>
+      <div class="runtime-item unknown"><div class="label">编码帧率 / 帧进度</div><div class="value" id="status-fps">读取中</div></div>
+      <div class="runtime-item unknown"><div class="label">手动 MP4 录像</div><div class="value" id="status-record">读取中</div></div>
+    </div>
+    <p class="muted" id="status-sample">状态文件读取中。</p>
+    <div class="note info"><b>状态判定范围：</b>FFmpeg 状态来自统一控制接口、实际帧进度、VPU 设备文件访问和 RTSP 会话。HDMI 卡片表示播放器进程在运行，画面以显示屏实际显示为准。原 GStreamer/TCP 链路仍可检测；系统 FFmpeg 与路线二 C 程序均保留。</div>
+    <div class="grid2">
+      <div class="card">
+        <h3 class="sub">电脑端刷新状态</h3>
+        <p class="muted">在本目录的 PowerShell 执行，随后刷新此 HTML 页面：</p>
+        <div class="codewrap"><div class="codebar"><span class="fn">Windows PowerShell · av_dev 根目录</span><button class="copy" type="button">复制</button></div><pre>powershell -NoProfile -ExecutionPolicy Bypass -File .\tools/deploy/refresh_status.ps1</pre></div>
+        <p class="muted"><code>powershell</code> 启动子进程，<code>-NoProfile</code> 不加载个人配置，<code>-ExecutionPolicy Bypass</code> 仅对这次运行放行，<code>-File</code> 指定只读采样脚本。它生成本机 <code>board_status.js</code>；采样超过 5 分钟会标记为过期。</p>
+      </div>
+      <div class="card">
+        <h3 class="sub">板端启动主链路</h3>
+        <p class="muted">独立 FFmpeg 直接采集 NV12M 并以 <code>hevc_rkmpp</code> 硬编；MediaMTX 分发 RTSP。直播默认不录像，录像按需启停。</p>
+        <div class="codewrap"><div class="codebar"><span class="fn">EVM3588-B Bash</span><button class="copy" type="button">复制</button></div><pre>python3 /userdata/av_dev/ffmpeg_pipeline/avctl.py start
+python3 /userdata/av_dev/ffmpeg_pipeline/avctl.py preview-start</pre></div>
+        <p class="muted"><code>python3</code> 运行统一控制工具；<code>start</code> 启动直播，<code>preview-start</code> 打开板端 HDMI 播放器。若摄像头被其它程序占用，会明确报错；不会自动停止它们。录像中改编码参数需要先结束录像。</p>
+      </div>
+    </div>
+    <div class="codewrap"><div class="codebar"><span class="fn">电脑 PowerShell · RTSP 实时播放</span><button class="copy" type="button">复制</button></div><pre>ffplay -rtsp_transport tcp -fflags nobuffer -flags low_delay -framedrop rtsp://192.168.2.221:8554/imx415</pre></div>
+    <p class="muted"><code>ffplay</code> 播放视频；<code>-rtsp_transport tcp</code> 用 TCP 传输，<code>-fflags nobuffer</code> 减少输入缓存，<code>-flags low_delay</code> 请求低延迟解码，<code>-framedrop</code> 在显示落后时丢弃显示帧。地址是板端 IP、8554 端口和 <code>/imx415</code> 路径。加入时可能需要等待下一个关键帧。若板子 IP 变化，板端 <code>hostname -I</code> 可查询新地址。</p>
+    <div class="note ok"><b>项目源码已梳理：</b><a href="../docs/architecture/项目程序逻辑与目录导航.md">程序逻辑与目录导航</a> · <a href="../docs/history/项目结构整理记录.md">本轮整理与验证</a> · 已发布桌面软件 1.1.0：<a href="../docs/architecture/Windows_控制台优化调研与实施.md">优化调研与改进</a> · <a href="../docs/guides/Windows_相机控制台操作指南.md">Windows 中文控制台使用说明</a> · <a href="../docs/history/Windows_相机控制台验收记录.md">桌面实际验收</a> · <a href="../docs/guides/FFmpeg_全链路操作指南.md">底层 FFmpeg 操作指南</a>。通过 SSH 控制、RTSP 实时预览、H.264/H.265 参数、HDMI、截图、MP4 与 SFTP 下载；无需每次手输命令。EXE 压缩包在本地交付，下载按钮读取 releases/ 中的本地交付文件。</div>
+  </div>
+</section>
+
+<!-- ===== 快速开始：解压与部署 ===== -->
+<section id="start" class="alt">
+  <div class="wrap">
+    <div class="sec-head">
+      <div class="sec-no">QUICK START / 解压与部署</div>
+      <h2>解压与部署；已跑通的主链路可直接用</h2>
+      <p>按顺序完成下面 5 步。PowerShell 命令在 Windows 电脑执行；Bash 命令在进入板子的 shell 后执行。</p>
+    </div>
+    <div class="quick-status">
+      <span class="tag t-green">本地代码包已解压</span>
+      <span class="tag t-green">IMX415 已接 con7（用户确认）</span>
+      <span class="tag t-cyan">新增 07 H.265 双端预览脚本</span>
+      <span class="tag t-green">NV12 采集、H.265 TCP 管线已验证</span>
+      <span class="tag t-violet">文档更新：2026-10-12</span>
+    </div>
+    <div class="note info"><b>当前主链路：</b>IMX415/con7 → 双平面 NV12M → 独立 FFmpeg → RK3588 VPU H.265 → MediaMTX RTSP 8554；HDMI、电脑和按需 MP4 录像均订阅同一条码流。旧 GStreamer/TCP 5000 为保留方案；不应同时打开同一个摄像头节点。</div>
+
+    <div class="quick-step card">
+      <h3>1. 确认唯一源码目录</h3>
+      <p>当前 av_dev 就是开发目录，直接修改这一份源码，不需要再次解压。项目入口见 <a href="../README.md">README.md</a>；已删除重复的“音视频代码包”目录。</p>
+      <div class="codewrap"><pre class="quick-tree">av_dev/
+├── README.md       阅读入口
+├── board/          当前板端程序与诊断
+├── desktop/        Windows 桌面主程序
+├── examples/       MPP C API / GStreamer 学习示例
+├── tools/          部署、检查、打包、开发工具
+├── docs/           Markdown 架构、指南、历史记录
+├── web/            仅保留此方案/状态页面
+├── releases/       本地 EXE 与源码 ZIP
+└── reference/      本地厂商资料</pre></div>
+      <p>只在迁移到另一份新目录时解压 <a href="../releases/av_dev-source.zip" download>releases/av_dev-source.zip</a>。以下命令在电脑 PowerShell、av_dev 根目录执行，目标目录须尚未存在：</p>
+      <div class="codewrap"><pre>Expand-Archive -LiteralPath '.\releases\av_dev-source.zip' -DestinationPath '..\av_dev_new'</pre></div>
+      <p>解释：Expand-Archive 解压 ZIP；-LiteralPath 指定当前源码包；-DestinationPath 创建相邻的新目录，避免在当前项目里生成第二套源码。</p>
+    </div>
+
+    <div class="quick-step card">
+      <h3>2. 连接板子，检查 ADB</h3>
+      <p>板子接好 12V 电源，电脑通过 Type-C 连接板子的 OTG / 烧写口。ADB 方式需要数据线和正确驱动；仅接网线时使用下面的 SSH 方式。</p>
+      <div class="codewrap"><div class="codebar"><span class="fn">Windows PowerShell · 当前电脑的 ADB 路径</span><button class="copy" type="button">复制</button></div>
+<pre>$adbPath = 'C:\Users\dvsense_docker\Desktop\work\RK3588\Tools\platform-tools\adb.exe'
+if (-not (Test-Path -LiteralPath $adbPath)) {
+    throw 'ADB 路径不存在，请改为本机 adb.exe 的实际路径。'
+}
+&amp; $adbPath devices
+&amp; $adbPath shell 'uname -a'
+&amp; $adbPath shell 'df -h /userdata'</pre></div>
+      <p>验收：设备列表中显示设备序列号及 <code>device</code>，并能读取板子的系统信息。<code>unauthorized</code> 需在设备端授权；<code>offline</code> 或空列表时检查供电、数据线、接口和驱动。</p>
+    </div>
+
+    <div class="quick-step card">
+      <h3>3. 推送到 /userdata/av_dev</h3>
+      <div class="grid2">
+        <div>
+          <h3 class="sub">方式 A：使用更新后的部署脚本</h3>
+          <p><a href="../tools/deploy/deploy.ps1"><code>tools/deploy/deploy.ps1</code></a> 自动寻找项目旁的 ADB 或 PATH 中的 <code>adb.exe</code>；必要时传入 <code>-AdbPath</code>。</p>
+          <div class="codewrap"><div class="codebar"><span class="fn">Windows PowerShell · 代码包根目录</span><button class="copy" type="button">复制</button></div>
+<pre>powershell -ExecutionPolicy Bypass -File .\tools/deploy/deploy.ps1</pre></div>
+          <p><code>powershell</code> 启动 PowerShell，<code>-ExecutionPolicy Bypass</code> 只对这次进程放行脚本，<code>-File</code> 指定部署脚本。脚本逐个上传 Shell 脚本和 C 源码；C 源码放入板端独立目录 <code>/userdata/av_dev/mpp_route2/</code>，不覆盖原有 <code>v4l2_mpp_enc/</code>。加 <code>-BuildExamples</code> 才会在板端编译；部署不会停止当前画面。</p>
+        </div>
+        <div>
+          <h3 class="sub">方式 B：逐个推送，便于检查</h3>
+          <p>先完成第 2 步，保留 <code>$adbPath</code> 变量。下面逐个推送文件，避免依赖 ADB 对通配符的处理。</p>
+          <div class="codewrap"><div class="codebar"><span class="fn">Windows PowerShell · 推荐排查部署问题时使用</span><button class="copy" type="button">复制</button></div>
+<pre>&amp; $adbPath shell 'mkdir -p /userdata/av_dev'
+if ($LASTEXITCODE -ne 0) { throw '创建板端目录失败' }
+Get-ChildItem -LiteralPath '.\board' -Filter '*.sh' -File | ForEach-Object {
+    &amp; $adbPath push $_.FullName '/userdata/av_dev/'
+    if ($LASTEXITCODE -ne 0) { throw "推送失败：$($_.Name)" }
+}
+&amp; $adbPath shell 'mkdir -p /userdata/av_dev/mpp_route2'
+Get-ChildItem -LiteralPath '.\examples\mpp_c_api' -File | ForEach-Object {
+    &amp; $adbPath push $_.FullName '/userdata/av_dev/mpp_route2/'
+    if ($LASTEXITCODE -ne 0) { throw "推送 C 源码失败：$($_.Name)" }
+}
+&amp; $adbPath shell 'chmod +x /userdata/av_dev/*.sh'
+&amp; $adbPath shell 'ls -l /userdata/av_dev; ls -l /userdata/av_dev/mpp_route2'</pre></div>
+          <p><code>mkdir -p</code> 创建路线二目录；<code>Get-ChildItem -File</code> 枚举本地 C 源码；<code>adb push</code> 逐个上传；<code>$LASTEXITCODE</code> 检查 ADB 是否成功；<code>chmod +x</code> 赋予板端脚本执行权限；<code>ls -l</code> 核对上传结果。以上均在电脑 PowerShell 运行。</p>
+        </div>
+      </div>
+      <div class="note info"><b>部署后核对：</b><code>ls -l /userdata/av_dev/07_h265_preview_tcp.sh</code>。脚本上传不会改变当前运行进程；如果已经在播，先保持原管线，切换时再按 <a href="#runtime">运行状态</a> 中的步骤操作。</div>
+      <details>
+        <summary style="cursor:pointer;font-weight:700">仅走网线：使用 SSH / SCP 部署</summary>
+        <p style="margin-top:10px">板子与电脑需网络互通、板端 SSH 服务已开启，电脑需有 <code>ssh</code> 和 <code>scp</code>。将下面示例 IP 改成板子的实际 IP，按提示完成登录。</p>
+        <div class="codewrap"><div class="codebar"><span class="fn">Windows PowerShell · SSH 替代方式</span><button class="copy" type="button">复制</button></div>
+<pre>$boardHost = 'root@192.168.2.100'
+ssh $boardHost 'mkdir -p /userdata/av_dev'
+if ($LASTEXITCODE -ne 0) { throw 'SSH 连接或目录创建失败' }
+scp -r .\board "${boardHost}:/userdata/av_dev/"
+if ($LASTEXITCODE -ne 0) { throw 'SCP 推送失败' }
+ssh $boardHost 'cp -R /userdata/av_dev/board/. /userdata/av_dev/ &amp;&amp; chmod +x /userdata/av_dev/*.sh &amp;&amp; ls -l /userdata/av_dev'
+ssh $boardHost</pre></div>
+        <p>SCP 先上传整个 <code>board/</code>，再把其内容复制到运行目录，因此后续命令同样使用 <code>/userdata/av_dev</code>。</p>
+      </details>
+    </div>
+
+    <div class="quick-step card">
+      <h3>4. 进入板子，运行环境检查</h3>
+      <p>ADB 方式在电脑执行 <code>&amp; $adbPath shell</code> 进入板端；SSH 方式已经进入板端。下面命令均在板子的 Linux shell 执行。</p>
+      <div class="codewrap"><div class="codebar"><span class="fn">板端 Bash · 先检查，再依次运行</span><button class="copy" type="button">复制</button></div>
+<pre>cd /userdata/av_dev
+ls -l
+bash 00_env_check.sh
+# 自检通过后，可直接继续第 5 步摄像头验证。
+# 以下为可选的独立硬编自测，用于区分采集与编码问题：
+bash 01_mpp_selftest.sh
+bash 02_gst_encode_selftest.sh</pre></div>
+      <div class="tbl"><table>
+        <thead><tr><th>检查项</th><th>通过依据 / 后续处理</th></tr></thead>
+        <tbody>
+          <tr><td>MPP 硬编通路</td><td>检查相关设备节点、<code>librockchip_mpp.so</code> 和编码日志；01 输出位于 <code>/userdata/mpp_test/</code>。若没有 <code>mpi_enc_test</code>，先走 02 的 GStreamer 路线。</td></tr>
+          <tr><td>GStreamer 插件</td><td><code>gst-inspect-1.0 mpph264enc</code> / <code>mpph265enc</code> 能显示插件；02 输出位于 <code>/userdata/gst_test/</code>，拷回电脑验证播放。</td></tr>
+          <tr><td>摄像头与音频</td><td>IMX415 已接入，按第 5 步检查驱动识别、采集节点与实际出帧；音频使用 <code>arecord -l</code> 确认声卡编号。</td></tr>
+        </tbody>
+      </table></div>
+      <p style="margin-top:12px">安装提示中的包名以板端软件源为准，<code>gstreamer1.0-rockchip</code> 不一定能通过 apt 获取。用 <code>gst-inspect-1.0 mpph264enc</code> 核实 <code>bps</code>、<code>gop</code>、<code>rc-mode</code> 等属性。脚本打印成功和文件非空只是初步检查，仍需查看错误日志及播放结果。</p>
+      <details style="margin-top:12px">
+         <summary style="cursor:pointer;font-weight:700">路线二：在板端编译两个 H.265 C 程序</summary>
+        <div class="codewrap"><div class="codebar"><span class="fn">板端 Bash · 已具备 gcc / make / MPP 开发文件时</span><button class="copy" type="button">复制</button></div>
+<pre>cd /userdata/av_dev/mpp_route2
+make
+ls -l yuv_mpp_enc v4l2_mpp_enc
+cd /userdata/av_dev</pre></div>
+        <p><code>cd</code> 进入隔离的 C 项目目录；<code>make</code> 用板端已安装的 <code>/usr/include/rockchip</code> 头文件和 <code>librockchip_mpp.so</code> 编译；<code>ls -l</code> 确认两个可执行文件生成。当前板子已编译成功，两个程序的 H.265 输出均已实测。程序不使用 RGA，也不接管 HDMI/TCP 推流。</p>
+      </details>
+    </div>
+
+    <div id="camera-start" class="quick-step card">
+      <h3>5. IMX415 验证记录与可选复测</h3>
+      <p>已在 con7 的 <code>/dev/video44</code> 成功采集 60 帧 NV12，并验证 H.265 管线。以下命令供更换固件或节点后复测。当前正在预览时不要并行执行采集命令；先在原管线终端结束，再测试。</p>
+      <div class="tbl" style="margin-top:12px"><table>
+        <thead><tr><th>接口</th><th>现有脚本中的参考节点</th><th>使用方式</th></tr></thead>
+        <tbody>
+          <tr><td>con7</td><td><code>/dev/video44</code></td><td>脚本节点参数 <code>44</code></td></tr>
+          <tr><td>con8</td><td><code>/dev/video62</code></td><td>脚本节点参数 <code>62</code></td></tr>
+          <tr><td>con9</td><td><code>/dev/video53</code></td><td>脚本节点参数 <code>53</code></td></tr>
+          <tr><td>con10</td><td><code>/dev/video71</code></td><td>脚本节点参数 <code>71</code></td></tr>
+        </tbody>
+      </table></div>
+      <p style="margin-top:12px">以上是代码包的参考映射，以当前固件枚举结果为准。选取 ISP 输出 NV12 的采集节点，避免把 RAW 输入、统计或参数节点作为编码输入。</p>
+      <div class="codewrap"><div class="codebar"><span class="fn">板端 Bash · 先确认驱动、节点与格式</span><button class="copy" type="button">复制</button></div>
+<pre>cd /userdata/av_dev
+v4l2-ctl --list-devices
+dmesg | grep -iE 'imx415|rkisp|rkcif' | tail -n 60
+systemctl status rkaiq_3A --no-pager
+# IMX415 已接 con7，参考节点为 video44；核对当前固件枚举结果：
+CAM_NODE=44
+CAM_DEV="/dev/video${CAM_NODE}"
+v4l2-ctl -d "$CAM_DEV" --all
+v4l2-ctl -d "$CAM_DEV" --list-formats-ext</pre></div>
+      <p>检查日志中的 sensor 识别信息，并确认所选节点支持 NV12。<code>rkaiq_3A</code> 是现有方案使用的服务名；若固件使用其他启动方式，结合 <code>ps -ef | grep '[r]kaiq'</code> 和固件说明检查。仅有 <code>/dev/video*</code> 节点还不能证明摄像头正常出帧。</p>
+      <div class="codewrap"><div class="codebar"><span class="fn">板端 Bash · 采集 60 帧，不写入视频文件</span><button class="copy" type="button">复制</button></div>
+<pre># 在同一个板端 shell 中继续，保留 CAM_NODE / CAM_DEV 变量。
+# 确认节点支持 1920x1080 NV12 后执行：
+v4l2-ctl -d "$CAM_DEV" \
+  --set-fmt-video=width=1920,height=1080,pixelformat=NV12
+v4l2-ctl -d "$CAM_DEV" --get-fmt-video
+timeout 15s v4l2-ctl -d "$CAM_DEV" \
+  --stream-mmap=4 --stream-count=60 --stream-to=/dev/null
+echo "采集退出码=$?"</pre></div>
+      <p>验收：采集完成 60 帧且退出码为 0；退出码 124 表示超时，需要检查采集链路。格式命令返回的实际宽高可能与请求不同，以回读值为准。命令参考 <a href="https://manpages.ubuntu.com/manpages/focal/man1/v4l2-ctl.1.html" target="_blank" rel="noopener">v4l2-ctl 使用说明</a>。</p>
+      <div class="codewrap"><div class="codebar"><span class="fn">板端 Bash · 可选 1080p H.265 试录（先停止实时管线）</span><button class="copy" type="button">复制</button></div>
+<pre>cd /userdata/av_dev
+bash 03_cam_encode.sh "$CAM_NODE" h265 1920x1080 4 20
+ls -lh /userdata/cam_*.mp4
+# 退出板端，回到电脑 PowerShell：
+exit</pre></div>
+      <div class="codewrap"><div class="codebar"><span class="fn">Windows PowerShell · 拷回自测文件与录制结果</span><button class="copy" type="button">复制</button></div>
+<pre>New-Item -ItemType Directory -Path '.\results' -Force | Out-Null
+&amp; $adbPath pull '/userdata/mpp_test' '.\results\mpp_test'
+&amp; $adbPath pull '/userdata/gst_test' '.\results\gst_test'
+# 把文件名改成板端 ls 显示的实际录制文件名：
+&amp; $adbPath pull '/userdata/cam_h265_1920x1080_实际时间.mp4' '.\results\'</pre></div>
+      <p>SSH 方式可在电脑执行 <code>scp "${boardHost}:/userdata/cam_*.mp4" .</code>。验证画面、播放时长和码率后，继续 <a href="#roadmap">实施路线</a> 中的音频录制与网络推流。</p>
+      <details style="margin-top:12px">
+        <summary style="cursor:pointer;font-weight:700">试录通过后：4K H.265 与电脑 VLC 实时推流</summary>
+        <p style="margin-top:10px">重新进入板端 shell，设置确认过的节点号。4K 需该节点支持 3840×2160@30 且具备 <code>mpph265enc</code>。录制和推流逐项执行，先结束前一项，再运行下一项。</p>
+        <div class="codewrap"><div class="codebar"><span class="fn">板端 Bash · 后续验证</span><button class="copy" type="button">复制</button></div>
+<pre>cd /userdata/av_dev
+CAM_NODE=44  # 改为已经确认的实际采集节点
+# 先测试 4K H.265 录制：
+bash 03_cam_encode.sh "$CAM_NODE" h265 3840x2160 12 20
+# 再测试 UDP 推流；示例 IP 必须替换为电脑的实际 IPv4 地址：
+PC_IP=192.168.2.165
+bash 04_cam_stream.sh udp "$PC_IP" "$CAM_NODE" h265 1920x1080</pre></div>
+        <p>电脑运行 <code>ipconfig</code> 查看与板子互通的网卡 IPv4 地址。先在 VLC 打开 <code>udp://@:5000</code>，再启动推流；若收不到画面，检查网络互通及 Windows 防火墙的 UDP 5000 放行设置。</p>
+      </details>
+      <div class="note info"><b>按故障环节排查：</b>不识别 IMX415 → 查接口、排线和固件配置；识别但采集超时 → 查 ISP / 3A 与采集节点；采集正常但编码失败 → 查硬编能力与日志。当前 FFmpeg 独占采集，其他摄像头测试先通过 <code>avctl.py stop</code> 释放设备，结束后恢复直播。</div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== 1. 目标 ===== -->
+<section id="goal">
+  <div class="wrap">
+    <div class="sec-head">
+      <div class="sec-no">01 / 需求拆解</div>
+      <h2>你要做的事，拆成四个数据处理环节</h2>
+      <p>“拿到摄像头源数据，做音视频处理，再实时压缩图像帧”本质是一条媒体数据流水线。每个环节 RK3588 都有对应的硬件单元，不需要 CPU 软编。</p>
+    </div>
+    <div class="grid4">
+      <div class="card">
+        <span class="tag t-cyan">① 采集</span>
+        <h3 class="sub" style="margin-top:12px">获取源数据</h3>
+        <p class="muted">IMX415 经 MIPI CSI-2 送入 RKISP，3A（AE/AWB/AF）成像后以 <code>NV12</code> 原始帧输出到 V4L2 节点 <code>/dev/video44</code>。这就是“源数据”。</p>
+      </div>
+      <div class="card">
+        <span class="tag t-violet">② 预处理</span>
+        <h3 class="sub" style="margin-top:12px">在数据源处理</h3>
+        <p class="muted">用 RGA 硬件 2D 引擎做缩放、裁剪、旋转、色彩空间转换、格式对齐（stride），不占 CPU。例如 4K 缩到 1080p、NV12 直通。</p>
+      </div>
+      <div class="card">
+        <span class="tag t-amber">③ 实时压缩</span>
+        <h3 class="sub" style="margin-top:12px">硬件编码帧</h3>
+        <p class="muted">NV12 帧送入 MPP/VENC，逐帧做 H.264/H.265 帧内+帧间压缩，输出带时间戳的压缩码流。这是“经典视频压缩算法”的硬件落地。</p>
+      </div>
+      <div class="card">
+        <span class="tag t-green">④ 输出</span>
+        <h3 class="sub" style="margin-top:12px">封装 / 推流</h3>
+        <p class="muted">裸码流封装为 MP4/TS 落盘，或经 RTP/UDP/RTSP 实时推到电脑；音频 AAC 编码后与视频同步复用（mux）。</p>
+      </div>
+    </div>
+    <div class="note info" style="margin-top:22px">
+      <b>关键认知：</b>“经典压缩算法”（H.264/H.265 的预测、变换、量化、熵编码）在 RK3588 上由 <b>VENC 硬件电路</b>完成，软件通过 MPP 接口喂帧、取码流即可。你既可以用 GStreamer 一行管线快速跑通，也可以用 MPP 的 C API 自己掌控每一帧——本方案两条路都给。
+    </div>
+  </div>
+</section>
+
+<!-- ===== 2. 硬件能力 ===== -->
+<section id="hw" class="alt">
+  <div class="wrap">
+    <div class="sec-head">
+      <div class="sec-no">02 / 硬件能力</div>
+      <h2>RK3588 上负责音视频的五个硬件单元</h2>
+      <p>下面列出方案所需的硬件单元、设备节点和库；是否可用，以板端环境自检和实际编码结果为准。</p>
+    </div>
+    <div class="tbl">
+      <table>
+        <colgroup><col style="width:15%"><col style="width:21%"><col style="width:25%"><col style="width:39%"></colgroup>
+        <thead><tr><th>硬件单元</th><th>职责</th><th>设备节点 / 库</th><th>本方案用途与规格</th></tr></thead>
+        <tbody>
+          <tr><td><b>MIPI CSI / RKISP</b><br><span class="tag t-cyan">采集成像</span></td><td>接收 sensor RAW，硬件 ISP 做 3A、去马赛克、降噪</td><td><code>/dev/video44/53/62/71</code><br><code>librkaiq.so</code></td><td>双 ISP，最多 4 路 IMX415；con7=video44 输出 NV12 3840×2160@30</td></tr>
+          <tr><td><b>VENC（MPP）</b><br><span class="tag t-amber">视频编码</span></td><td>H.264/H.265/MJPEG 硬件编码</td><td><code>/dev/mpp_service</code><br><code>librockchip_mpp.so</code></td><td>实时压缩核心。支持 CBR/VBR/FIXQP 码率控制、GOP、Profile/Level；官方验证 4K@30 流畅</td></tr>
+          <tr><td><b>VDEC（MPP）</b><br><span class="tag t-cyan">视频解码</span></td><td>H.265/H.264/VP9 等硬件解码</td><td><code>/dev/rkvdec</code></td><td>反向链路（回放、解码测试），本方案用于验证编码结果</td></tr>
+          <tr><td><b>RGA 2D</b><br><span class="tag t-violet">图形加速</span></td><td>缩放 / 旋转 / 格式转换 / 裁剪</td><td><code>/dev/rga</code><br><code>librga.so</code></td><td>进阶预处理；需显式使用支持 RGA 的实现，普通 videoscale / videoconvert 不代表硬件加速</td></tr>
+          <tr><td><b>音频 es8388</b><br><span class="tag t-violet">音频</span></td><td>麦克风/耳机模拟音频采集与播放</td><td>ALSA <code>hw:0,0</code><br><code>arecord/aplay</code></td><td>采集 PCM → AAC 软编（CPU 占用极低）→ 与视频复用</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="note warn">
+      <b>规格说明：</b>RK3588 官方 GStreamer 指南明确“播放 4K@30 不卡顿，4K@60 可能卡顿”。具体编码吞吐、码率-画质曲线需在你板子上用本方案的自测脚本<b>实测</b>（脚本会打印实时 fps 与平均码率），不做纸面假设。
+    </div>
+  </div>
+</section>
+
+<!-- ===== 3. 技术选型 ===== -->
+<section id="stack">
+  <div class="wrap">
+    <div class="sec-head">
+      <div class="sec-no">03 / 技术选型</div>
+      <h2>三种开发深度，按学习/产品目标递进</h2>
+      <p>同一个硬件编码器 MPP，上层有三种调用方式。建议从路线一快速验证，再用路线二吃透压缩链路，产品化时回到路线一或路线三。</p>
+    </div>
+    <div class="grid3">
+      <div class="card" style="border-top:3px solid var(--cyan)">
+        <span class="tag t-cyan">路线一 · 推荐起步</span>
+        <h3 class="sub" style="margin-top:12px">GStreamer 管线</h3>
+        <p class="muted" style="margin-bottom:12px">用 <code>v4l2src → mpph264enc → mp4mux</code> 等插件拼管线，一行命令完成采集+硬编+封装/推流。</p>
+        <ul class="tick">
+          <li><b>优点：</b>最快出结果、插件全、自带音视频同步和推流</li>
+          <li><b>适合：</b>功能验证、快速原型、产品主体</li>
+          <li><b>关键插件：</b>mpph264enc / mpph265enc / mppjpegenc</li>
+        </ul>
+      </div>
+      <div class="card" style="border-top:3px solid var(--amber)">
+        <span class="tag t-amber">路线二 · 核心学习</span>
+        <h3 class="sub" style="margin-top:12px">MPP C API 自研</h3>
+        <p class="muted" style="margin-bottom:12px">已实现并实测：IMX415 的双平面 NV12M → V4L2 MMAP 取帧 → MppEncCfg 配置 H.265 CBR/GOP → <code>encode_put_frame / encode_get_packet</code> 逐帧编码，输出裸码流文件。</p>
+        <ul class="tick">
+          <li><b>优点：</b>看透压缩全流程；ROI、运行时动态码率、私有封装可作为后续扩展，当前程序尚未实现</li>
+          <li><b>适合：</b>理解算法、深度定制、算法对接</li>
+          <li><b>参考：</b>SDK <code>external/mpp/test/mpi_enc_test.c</code></li>
+        </ul>
+      </div>
+      <div class="card" style="border-top:3px solid var(--violet)">
+        <span class="tag t-violet">路线三 · 进阶</span>
+        <h3 class="sub" style="margin-top:12px">ffmpeg / rockit</h3>
+        <p class="muted" style="margin-bottom:12px">新增独立 FFmpeg 环境，已提供 <code>hevc_rkmpp / h264_rkmpp</code> 编码器；H.265 通过 VPU 硬编并发布 RTSP，可同时在 HDMI 与电脑播放、按需录制 MP4。系统原 FFmpeg 和 MPP 运行库保留。Rockit 仍为后续多路图方向。</p>
+        <ul class="tick">
+          <li><b>优点：</b>生态丰富、多路图、容器/协议全</li>
+          <li><b>适合：</b>成熟产品、需要 ffmpeg 滤镜生态</li>
+          <li><b>构建依据：</b>固定 FFmpeg/MPP/RGA 源码提交、NV12M 兼容补丁和 MediaMTX 校验值；新库只对独立 FFmpeg 生效</li>
+        </ul>
+      </div>
+    </div>
+    <div class="note ok"><b>实测入口：</b>当前 FFmpeg / RTSP 两端画面已由用户确认，录像、截图和恢复指标见 <a href="../docs/history/FFmpeg_全链路验收记录.md">完整验收记录</a>。路线二 C 程序仍保留，离线输出 30 帧 640×360 HEVC、摄像头输出 60 帧 1920×1080 HEVC，均经 ffprobe 检查。C 程序输出文件，摄像头测试须先暂停当前 FFmpeg 主链路，结束后再恢复。</div>
+  </div>
+</section>
+
+<!-- ===== 4. 数据链路架构图 ===== -->
+<section id="arch" class="alt">
+  <div class="wrap">
+    <div class="sec-head">
+      <div class="sec-no">04 / 核心架构</div>
+      <h2>视频流实时压缩数据链路</h2>
+      <p>从光子到网络码流的完整硬件通路。橙色高亮即“实时压缩”发生的位置。</p>
+    </div>
+
+    <div class="pipeline">
+      <div class="pl-row">
+        <div class="pl-node n-sensor">
+          <div class="ico">SENSOR</div><div class="tt">IMX415</div>
+          <div class="dd">MIPI CSI-2<br>4K RAW@30</div>
+        </div>
+        <div class="pl-arrow">→</div>
+        <div class="pl-node n-isp">
+          <div class="ico">RKISP + rkaiq</div><div class="tt">硬件 ISP</div>
+          <div class="dd">3A/去马赛克<br>输出 NV12</div>
+        </div>
+        <div class="pl-arrow">→</div>
+        <div class="pl-node n-rga">
+          <div class="ico">RGA 2D</div><div class="tt">预处理</div>
+          <div class="dd">缩放/裁剪/旋转<br>stride 对齐</div>
+        </div>
+        <div class="pl-arrow">→</div>
+        <div class="pl-node n-venc">
+          <div class="ico">MPP / VENC</div><div class="tt">硬件编码</div>
+          <div class="dd">H.264/H.265<br>CBR·GOP·熵编码</div>
+        </div>
+        <div class="pl-arrow">→</div>
+        <div class="pl-node n-out">
+          <div class="ico">MUX / NET</div><div class="tt">封装输出</div>
+          <div class="dd">MP4/TS 落盘<br>RTSP/UDP 推流</div>
+        </div>
+      </div>
+      <div class="pl-data">/dev/video44 · V4L2 dqbuf(NV12) → encode_put_frame(MppFrame) → encode_get_packet(MppPacket) → .h264/.h265</div>
+
+      <div class="pl-audiorow">
+        <span class="lab">AUDIO ▸</span>
+        <span class="pl-chip">es8388 麦克风</span><span style="color:#5f7185">→</span>
+        <span class="pl-chip">ALSA 采集 PCM</span><span style="color:#5f7185">→</span>
+        <span class="pl-chip">AAC 编码</span><span style="color:#5f7185">→</span>
+        <span class="pl-chip" style="border-color:var(--green);color:#9fd8b6">mp4mux 音视频同步复用</span>
+      </div>
+
+      <div class="pl-legend">
+        <span><i style="background:var(--cyan)"></i>采集/成像</span>
+        <span><i style="background:var(--violet)"></i>预处理/音频</span>
+        <span><i style="background:var(--amber)"></i>实时压缩（核心）</span>
+        <span><i style="background:var(--green)"></i>输出</span>
+      </div>
+      <div class="pl-note">
+        零拷贝产品链路：ISP /dev/video44 与 VENC 共用 <b>dma-buf(fd)</b>，NV12 帧始终留在物理内存，RGA 与 MPP 直接拿 fd 处理，全程不经过 CPU memcpy。<br>
+        本方案教学代码先用 memcpy（稳定易懂），性能优化章节给出升级到 dma-buf 零拷贝的方法。
+      </div>
+    </div>
+
+    <div class="grid2" style="margin-top:22px">
+      <div class="card">
+        <h3 class="sub">软件分层（对应 MPP 官方框架）</h3>
+        <div class="codewrap" style="margin:0">
+<pre><span class="cm"># 自顶向下</span>
+Application      你的程序 / GStreamer 管线 / ffmpeg
+      ↓
+MPI 接口          encode_put_frame / encode_get_packet
+      ↓
+MPP encoder       H.264 / H.265 / MJPEG 编码 + RC 码率控制
+      ↓
+MPP HAL  →  kernel: mpp_service / vcodec_service
+      ↓
+Hardware          VENC 硬件编码电路</pre>
+        </div>
+      </div>
+      <div class="card">
+        <h3 class="sub">接口与节点速查（已核实）</h3>
+        <div class="tbl" style="border-radius:8px">
+          <table style="font-size:12.8px">
+            <tbody>
+              <tr><td>con7 摄像头</td><td><code>/dev/video44</code></td></tr>
+              <tr><td>con8 / con9 / con10</td><td><code>video62 / 53 / 71</code></td></tr>
+              <tr><td>硬编服务</td><td><code>/dev/mpp_service</code></td></tr>
+              <tr><td>Gst 硬编插件</td><td><code>mpph264enc / mpph265enc</code></td></tr>
+              <tr><td>采集接口</td><td><code>v4l2src / V4L2 MMAP</code></td></tr>
+              <tr><td>音频</td><td><code>arecord hw:0,0 (es8388)</code></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== 5. 压缩算法 ===== -->
+<section id="codec">
+  <div class="wrap">
+    <div class="sec-head">
+      <div class="sec-no">05 / 压缩算法</div>
+      <h2>为什么必须压缩，H.264/H.265 在做什么</h2>
+      <p>先看原始数据量，再理解硬件编码器每一帧做了哪些“经典压缩”动作。</p>
+    </div>
+
+    <h3 class="sub">原始码率 vs 压缩码率（NV12，30fps，实算）</h3>
+    <div class="card" style="margin-bottom:26px">
+      <div class="barblk" style="margin:14px 0">
+        <div class="bar-row">
+          <div class="bar-lab">1080p30 原始 NV12</div>
+          <div class="bar-track"><div class="bar-fill raw" style="width:100%"><span>746.5 Mbps · 89.0 MB/s</span></div></div>
+        </div>
+        <div class="bar-row">
+          <div class="bar-lab">1080p30 H.264</div>
+          <div class="bar-track"><div class="bar-fill h264" style="width:5.4%"><span>4 Mbps</span></div></div>
+        </div>
+        <div class="bar-row" style="margin-top:18px">
+          <div class="bar-lab">4K30 原始 NV12</div>
+          <div class="bar-track"><div class="bar-fill raw" style="width:100%"><span>2986 Mbps (≈2.99 Gbps) · 356 MB/s</span></div></div>
+        </div>
+        <div class="bar-row">
+          <div class="bar-lab">4K30 H.265</div>
+          <div class="bar-track"><div class="bar-fill h265" style="width:16%"><span>12 Mbps</span></div></div>
+        </div>
+      </div>
+      <p class="muted" style="margin-top:10px">单帧原始大小：1080p NV12 ≈ 2.97 MB，4K NV12 ≈ 11.87 MB。压缩比约 <b style="color:var(--amber)">187:1（1080p）</b> 与 <b style="color:var(--amber)">249:1（4K）</b>。不压缩，网口和 eMMC 都无法实时承载——这就是必须硬件编码的原因。</p>
+    </div>
+
+    <div class="grid2">
+      <div class="card">
+        <h3 class="sub">三种编码格式怎么选</h3>
+        <div class="tbl" style="border-radius:8px">
+          <table style="font-size:13px">
+            <thead><tr><th>格式</th><th>特点</th><th>适用</th></tr></thead>
+            <tbody>
+              <tr><td><b>H.264</b><br><span class="tag t-amber">MPP type 7</span></td><td>兼容性较好，旧示例支持</td><td>兼容性参考；当前主链路不使用</td></tr>
+              <tr><td><b>H.265/HEVC</b><br><span class="tag t-amber">type 16777220</span></td><td>同等画质省码率 30~45%，编解码更重</td><td>4K、带宽/存储受限</td></tr>
+              <tr><td><b>MJPEG</b><br><span class="tag t-amber">type 8</span></td><td>每帧独立 JPEG，无帧间压缩，码率大</td><td>抓拍、低延迟逐帧、简单分析</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="muted" style="margin-top:10px">当前主链路选择 <b>H.265</b>，由 <code>hevc_rkmpp</code> 硬编，通过 RTSP TCP 分发。H.264 已提供配置入口，完整实测仍以 H.265 为准；旧 GStreamer 示例保留。</p>
+      </div>
+
+      <div class="card">
+        <h3 class="sub">硬件编码器每帧做的事</h3>
+        <ul class="tick">
+          <li><b>帧内预测（I 帧）：</b>在帧内按块预测，去除空间冗余，可独立解码</li>
+          <li><b>帧间预测（P/B 帧）：</b>运动估计+运动补偿，参考相邻帧，只编码“差异”，去除时间冗余（压缩主力）</li>
+          <li><b>变换+量化：</b>DCT 变换到频域后量化，丢弃人眼不敏感的高频</li>
+          <li><b>环路滤波 / SAO：</b>抑制块效应（H.265 更强）</li>
+          <li><b>熵编码：</b>H.264 CABAC / H.265 CABAC，无损压缩语法元素</li>
+        </ul>
+        <p class="muted" style="margin-top:8px">这些步骤由 VENC 电路在帧级别并行完成，你通过 MPP 配置 Profile/Level/GOP/码率，再喂 NV12 帧即可。</p>
+      </div>
+    </div>
+
+    <h3 class="sub" style="margin-top:30px">GOP 图像组结构（决定延迟与压缩率）</h3>
+    <div class="card">
+      <div class="gop">
+        <div class="gop-frame I"><span>I</span><small>关键帧</small></div>
+        <div class="gop-frame P"><span>P</span></div>
+        <div class="gop-frame P"><span>P</span></div>
+        <div class="gop-frame P"><span>P</span></div>
+        <div class="gop-frame I"><span>I</span><small>关键帧</small></div>
+        <div class="gop-frame P"><span>P</span></div>
+        <div class="gop-frame P"><span>P</span></div>
+        <div class="gop-frame P"><span>P</span></div>
+      </div>
+      <div class="grid3" style="margin-top:18px">
+        <div class="gop-note"><b>GOP = 30</b><br><span class="muted">每 30 帧一个 I 帧（1 秒@30fps），本方案默认</span></div>
+        <div class="gop-note"><b>低延迟推流</b><br><span class="muted">GOP 调小（如 15）、可关 B 帧，起播/seek 更快</span></div>
+        <div class="gop-note"><b>高压缩存储</b><br><span class="muted">GOP 调大 + B 帧，体积更小，但延迟和算力上升</span></div>
+      </div>
+    </div>
+
+    <h3 class="sub" style="margin-top:28px">码率控制（RC）：CBR / VBR / FIXQP</h3>
+    <div class="tbl">
+      <table>
+        <colgroup><col style="width:16%"><col style="width:42%"><col style="width:42%"></colgroup>
+        <thead><tr><th>模式</th><th>行为</th><th>本方案用途</th></tr></thead>
+        <tbody>
+          <tr><td><b>CBR</b></td><td>恒定码率，围绕 bps_target 波动，带宽可预测</td><td><b>实时推流首选</b>，脚本默认 rc-mode=cbr</td></tr>
+          <tr><td><b>VBR</b></td><td>复杂画面给高码率、静态画面给低码率，整体更省</td><td>录像存储，设 bps_max / bps_min</td></tr>
+          <tr><td><b>FIXQP</b></td><td>固定量化参数，码率随内容浮动</td><td>画质/算法评估、调试</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="muted" style="margin-top:8px">MPP 配置字段：<code>rc:mode</code>、<code>rc:bps_target/max/min</code>、<code>rc:gop</code>、<code>h264:profile/level</code>，在 C 程序与 GStreamer 的 <code>bps/gop/rc-mode</code> 属性中一一对应。</p>
+  </div>
+</section>
+
+<!-- ===== 6. 实施路线 ===== -->
+<section id="roadmap" class="alt">
+  <div class="wrap">
+    <div class="sec-head">
+      <div class="sec-no">06 / 实施路线</div>
+      <h2>六个阶段，从无摄像头自测到实时推流</h2>
+      <p>IMX415 已接入：部署与环境自检完成后，可直接进入阶段 3 验证采集编码；阶段 1～2 保留为独立硬编排查步骤。每个阶段都有明确验收标准。</p>
+    </div>
+
+    <div class="phase">
+      <div class="phase-rail"><div class="phase-dot">0</div><div class="phase-line"></div></div>
+      <div class="phase-body">
+        <h4>部署代码 + 环境自检</h4>
+        <div class="when">前置：板子上电、Type-C/网线连通 · 产物：00_env_check.sh</div>
+        <div class="pc">
+          <p class="muted" style="margin-bottom:9px">先按 <a href="#start">解压与部署</a> 检查代码包、ADB 路径及推送结果，再进入板端执行自检：</p>
+          <div class="codewrap" style="margin:0 0 10px"><pre>powershell -ExecutionPolicy Bypass -File tools/deploy/deploy.ps1
+<span class="cm"># 板子上执行：</span>
+cd /userdata/av_dev
+bash 00_env_check.sh</pre></div>
+          <div class="okline">验收：MPP 通路和所需插件可用；未接摄像头时先完成阶段 1～2。软件包名以板端软件源为准，节点存在还需实际编码验证。</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="phase">
+      <div class="phase-rail"><div class="phase-dot">1</div><div class="phase-line"></div></div>
+      <div class="phase-body">
+        <h4>MPP 硬件编码器自测（无需摄像头）</h4>
+        <div class="when">验证 VENC 硬件 · 产物：01_mpp_selftest.sh</div>
+        <div class="pc">
+          <p class="muted" style="margin-bottom:9px">mpi_enc_test 不喂输入时内部生成彩条图，直接走硬件编码，验证 H.264/H.265/JPEG：</p>
+          <div class="codewrap" style="margin:0 0 10px"><pre>bash 01_mpp_selftest.sh
+<span class="cm"># 等价单条命令（H.264 1080p 300帧）：</span>
+mpi_enc_test -w 1920 -h 1080 -t 7    -n 300 -o /userdata/t.h264
+<span class="cm">#                        H.265 = -t 16777220   JPEG = -t 8</span></pre></div>
+          <div class="okline">验收：打印 test success、输出 .h264/.h265 文件非空、报告 fps 与平均码率；4K H.265 压测可实时即说明 VENC 通路健康。</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="phase">
+      <div class="phase-rail"><div class="phase-dot">2</div><div class="phase-line"></div></div>
+      <div class="phase-body">
+        <h4>GStreamer 硬编管线自测（无需摄像头）</h4>
+        <div class="when">验证框架链路 · 产物：02_gst_encode_selftest.sh</div>
+        <div class="pc">
+          <p class="muted" style="margin-bottom:9px">用 videotestsrc 测试图案走 mpph264enc/mpph265enc，封装 MP4/TS：</p>
+          <div class="codewrap" style="margin:0 0 10px"><pre>bash 02_gst_encode_selftest.sh
+<span class="cm"># 最小 H.264 硬编管线：</span>
+gst-launch-1.0 -e videotestsrc num-buffers=300 \
+  ! video/x-raw,format=NV12,width=1920,height=1080,framerate=30/1 \
+  ! mpph264enc rc-mode=cbr bps=4000000 gop=30 \
+  ! h264parse ! mp4mux ! filesink location=t.mp4</pre></div>
+          <div class="okline">验收：生成可播放的 MP4，检查错误日志与输出帧数。当前脚本的 fakesink 管线没有加入 fpsdisplaysink，不能仅凭调试环境变量得到可靠帧率统计。</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="phase">
+      <div class="phase-rail"><div class="phase-dot">3</div><div class="phase-line"></div></div>
+      <div class="phase-body">
+        <h4>验证已接入的 IMX415，实时采集编码</h4>
+        <div class="when">硬件：IMX415 已接 con7，参考节点 /dev/video44 · 产物：03_cam_encode.sh</div>
+        <div class="pc">
+          <p class="muted" style="margin-bottom:9px">IMX415 已接 con7。先按 <a href="#camera-start">IMX415 验证步骤</a> 确认驱动识别、video44 节点和 NV12 出帧，再执行以下录制命令：</p>
+          <div class="codewrap" style="margin:0 0 10px"><pre><span class="cm"># 可选：有显示环境且固件提供该脚本时预览，退出预览后再录制：</span>
+if [ -f /usr/bin/cam_dcphy0.sh ]; then bash /usr/bin/cam_dcphy0.sh; fi
+<span class="cm"># 本方案实时编码录制（节点 编码 分辨率 码率Mbps 秒数）：</span>
+bash 03_cam_encode.sh 44 h264 1920x1080 4 20
+bash 03_cam_encode.sh 44 h265 3840x2160 12 20</pre></div>
+          <div class="need">无显示器时脚本自动切 fakesink，仅录文件不弹窗；也可全程 ssh 运行。con8/9/10 换节点号 62/53/71。</div>
+          <div class="okline">验收：MP4 可播放、画面正常、时长准确、码率贴近设定值。</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="phase">
+      <div class="phase-rail"><div class="phase-dot">4</div><div class="phase-line"></div></div>
+      <div class="phase-body">
+        <h4>MPP C API 自研编码（吃透压缩链路）</h4>
+        <div class="when">已在板端验证 · 产物：/userdata/av_dev/mpp_route2/ 下两个 H.265 C 程序</div>
+        <div class="pc">
+          <div class="note info"><b>完整操作与修改指南：</b><a href="../docs/guides/路线二_MPP_C_API_操作与修改指南.md">路线二 MPP C API 手册（浏览器阅读）</a>，也可查看 <a href="../docs/guides/路线二_MPP_C_API_操作与修改指南.md">Markdown 原文</a>。逐条解释电脑/板端命令，讲解两个程序、双平面内存和 MPP 配置，并给出码率/GOP 实验与后续动态码率、网络输出的开发顺序。本次更新前的方案已另存于本地 <code>backups/before_route2_guide_20261012_172937/</code>，含校验清单。</div>
+          <p class="muted" style="margin-bottom:9px">先不碰摄像头，用测试图验证 MPP；随后在暂停 HDMI/TCP 主链路的短暂窗口中录制摄像头，再恢复 07 脚本。</p>
+          <div class="codewrap" style="margin:0 0 10px"><pre>cd /userdata/av_dev/mpp_route2
+make
+gst-launch-1.0 -q videotestsrc pattern=smpte num-buffers=30 \
+  ! video/x-raw,format=NV12,width=640,height=360,framerate=30/1 \
+  ! filesink location=test_640x360.nv12
+./yuv_mpp_enc -i test_640x360.nv12 -o test_640x360_mpp.h265 \
+  -w 640 -h 360 -b 1000000 -f 30 -n 30
+ffprobe -v error -f hevc -count_frames \
+  -show_entries stream=codec_name,width,height,nb_read_frames \
+  -of default=noprint_wrappers=1 test_640x360_mpp.h265</pre></div>
+          <p><code>cd</code> 选定板端路线二目录，<code>make</code> 编译；<code>gst-launch-1.0 -q</code> 安静生成 30 帧 640×360 NV12 原始测试图；<code>yuv_mpp_enc</code> 用 <code>-i/-o</code> 指定输入/输出，<code>-w/-h</code> 设置尺寸，<code>-b</code> 设置每秒 1000000 比特目标码率，<code>-f</code> 设置 30 fps，<code>-n</code> 设置编码 30 帧。<code>ffprobe -v error</code> 只打印错误，<code>-f hevc</code> 指定裸 H.265 格式，<code>-count_frames</code> 与 <code>-show_entries</code> 核对编码格式、尺寸和完整帧数。输出文件名必须是未使用过的名称，程序会拒绝覆盖已有文件。</p>
+          <div class="codewrap" style="margin:10px 0"><pre>lsof /dev/video44
+ss -lntp 'sport = :5000'
+./v4l2_mpp_enc -d /dev/video44 -o imx415_route2.h265 \
+  -c h265 -w 1920 -h 1080 -b 4000000 -f 30 -n 60
+ffprobe -v error -f hevc -count_frames \
+  -show_entries stream=codec_name,width,height,nb_read_frames \
+  -of default=noprint_wrappers=1 imx415_route2.h265</pre></div>
+          <p><code>lsof</code> 查看摄像头占用进程，<code>ss</code> 查看 TCP 5000 监听进程。先在运行 07 脚本的板端终端按 <code>Ctrl+C</code> 并确认二者均已释放；后台运行时先核实 PID 再只停止该 PID。<code>v4l2_mpp_enc</code> 用 <code>-d</code> 指定 IMX415 采集节点，<code>-o</code> 指定新输出文件，<code>-c h265</code> 指定编码格式，其余尺寸、码率、帧率和帧数选项含义与上一条相同。最后一条 <code>ffprobe</code> 核对实际输出。录完在板端运行 <code>DISPLAY=:0 bash /userdata/av_dev/07_h265_preview_tcp.sh</code> 恢复 HDMI/TCP；<code>DISPLAY=:0</code> 选择 HDMI 图形会话，<code>bash</code> 启动脚本。电脑如需重新连接，则在电脑 PowerShell 运行 <code>ffplay -f hevc tcp://192.168.2.221:5000</code>，其中 <code>-f hevc</code> 指定 H.265 裸流，地址是板端 IP 和监听端口。</p>
+          <div class="okline">本板实测：测试图 30/30 帧、640×360；IMX415 60/60 帧、1920×1080，摄像头段约 1.96 秒，平均 30.7 fps。均由 ffprobe 确认可解码；测试结束后已恢复原 HDMI/TCP 主链路。</div>
+          <div class="tbl" style="margin-top:12px"><table>
+            <thead><tr><th>代码位置</th><th>这一层做什么</th><th>继续开发时关注</th></tr></thead>
+            <tbody>
+              <tr><td><code>v4l2_mpp_enc.c</code></td><td><code>VIDIOC_S_FMT</code> 选双平面 NV12M，<code>REQBUFS/QUERYBUF/mmap</code> 建缓冲，<code>DQBUF/QBUF</code> 逐帧出入队</td><td>节点与分辨率必须按实际驱动确认；此处是两平面内存布局</td></tr>
+              <tr><td><code>mpp_h265.c</code> 配置</td><td><code>MPP_ENC_GET_CFG/SET_CFG</code> 设置宽高、对齐步长、NV12、CBR 目标码率、帧率与 GOP，并取 VPS/SPS/PPS</td><td>调码率/GOP 应从这里着手；当前尚无运行时动态更新接口</td></tr>
+              <tr><td><code>mpp_h265.c</code> 编码</td><td>按行复制 Y/UV 到 MPP 缓冲，设置 PTS，<code>encode_put_frame</code> 送帧，<code>encode_get_packet</code> 取包并写入 <code>.h265</code></td><td>这是学习版拷贝路径；多路低延迟可进一步研究 DMA-BUF 零拷贝与缓冲生命周期</td></tr>
+            </tbody>
+          </table></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="phase">
+      <div class="phase-rail"><div class="phase-dot">5</div><div class="phase-line"></div></div>
+      <div class="phase-body">
+        <h4>音频同步、封装与网络推流</h4>
+        <div class="when">产品化 · 产物：05_av_record.sh、04_cam_stream.sh</div>
+        <div class="pc">
+          <p class="muted" style="margin-bottom:9px">视频硬编 + ALSA 音频 AAC，MP4 同步录制；或低延迟 UDP-TS 推到电脑 VLC：</p>
+          <div class="codewrap" style="margin:0 0 10px"><pre><span class="cm"># 音视频同步录 MP4（20秒）：</span>
+bash 05_av_record.sh 44 20 1920x1080
+<span class="cm"># UDP/TS 推流到电脑（电脑 VLC 打开 udp://@:5000）：</span>
+bash 04_cam_stream.sh udp 192.168.2.165 44 h264 1920x1080</pre></div>
+          <div class="okline">验收：MP4 音画同步；电脑 VLC 能拉到实时画面（局域网延迟约数百 ms 级）。需要标准 RTSP 时编译 gst-rtsp-server，脚本已内置命令模板。</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<!-- ===== 7. 代码实现 ===== -->
+<section id="code">
+  <div class="wrap">
+    <div class="sec-head">
+      <div class="sec-no">07 / 代码实现</div>
+      <h2>三段核心代码</h2>
+      <p>完整可编译源码在交付目录 <code>board/</code>，此处展示最关键的实现片段，对应数据链路上的三个动作。</p>
+    </div>
+
+    <div class="tab-group">
+      <div class="tabs">
+        <button class="tab-btn active" data-tab="pane-gst">GStreamer 硬编管线</button>
+        <button class="tab-btn" data-tab="pane-mpp">MPP 硬件编码（C）</button>
+        <button class="tab-btn" data-tab="pane-v4l2">V4L2 采集（C）</button>
+      </div>
+
+      <div id="pane-gst" class="tab-pane active">
+        <div class="card" style="border-radius:0 11px 11px 11px">
+          <h3 class="sub">摄像头采集 → H.264 硬编 → 同时录文件与预览</h3>
+          <p class="muted" style="margin-bottom:10px">tee 把 NV12 帧分两路：一路 mpph264enc 走 VENC 硬编存 MP4，一路本地显示。queue 解耦防止卡死。</p>
+          <div class="codewrap"><div class="codebar"><span class="b b1"></span><span class="b b2"></span><span class="b b3"></span><span class="fn">03_cam_encode.sh 核心管线</span><button class="copy">复制</button></div>
+<pre>gst-launch-1.0 -e \
+  v4l2src device=/dev/video44 num-buffers=600 \
+  ! video/x-raw,format=NV12,width=1920,height=1080,framerate=30/1 \
+  ! tee name=t \
+  t. ! queue max-size-buffers=2 leaky=downstream \
+       ! mpph264enc rc-mode=cbr bps=4000000 gop=30 \
+       ! h264parse ! mp4mux faststart=true \
+       ! filesink location=/userdata/cam.mp4 \
+  t. ! queue max-size-buffers=2 leaky=downstream \
+       ! videoconvert ! autovideosink sync=false                       <span class="cm"># 本地预览(无显示器改 fakesink)</span></pre></div>
+          <p class="muted">换 H.265：<code>mpph264enc→mpph265enc</code>、<code>h264parse→h265parse</code>。裸码流（低延迟分析）去掉 mp4mux，直接 <code>filesink location=out.h264</code>。</p>
+        </div>
+      </div>
+
+      <div id="pane-mpp" class="tab-pane">
+        <div class="card" style="border-radius:0 11px 11px 11px">
+          <h3 class="sub">配置编码器并逐帧编码（MPP / MPI）</h3>
+          <p class="muted" style="margin-bottom:10px">以下是已验证的 H.265 路线二程序的关键调用顺序示意，省略了变量声明、错误处理和清理代码，不能作为独立程序编译；可运行的完整实现见 <code>mpp_h265.c</code>，板端已分别编码测试图与 IMX415 画面。</p>
+          <div class="codewrap"><div class="codebar"><span class="b b1"></span><span class="b b2"></span><span class="b b3"></span><span class="fn">MPP 编码初始化</span><button class="copy">复制</button></div>
+<pre>mpp_create(&ctx, &mpi);
+mpp_init(ctx, MPP_CTX_ENC, MPP_VIDEO_CodingHEVC);       <span class="cm">// 本项目只用 H.265</span>
+mpp_enc_cfg_init(&cfg);
+mpi->control(ctx, MPP_ENC_GET_CFG, cfg);               <span class="cm">// 先取默认配置</span>
+<span class="cm">// 输入图像（NV12，stride 16 对齐）</span>
+mpp_enc_cfg_set_s32(cfg, "prep:width",      w);
+mpp_enc_cfg_set_s32(cfg, "prep:height",     h);
+mpp_enc_cfg_set_s32(cfg, "prep:hor_stride", ALIGN(w,16));
+mpp_enc_cfg_set_s32(cfg, "prep:ver_stride", ALIGN(h,16));
+mpp_enc_cfg_set_s32(cfg, "prep:format",     MPP_FMT_YUV420SP);
+<span class="cm">// 码率控制：CBR + 目标码率 + GOP + 帧率</span>
+mpp_enc_cfg_set_s32(cfg, "rc:mode",       MPP_ENC_RC_MODE_CBR);
+mpp_enc_cfg_set_s32(cfg, "rc:bps_target", bps);
+mpp_enc_cfg_set_s32(cfg, "rc:bps_max",    bps*17/16);
+mpp_enc_cfg_set_s32(cfg, "rc:bps_min",    bps*15/16);
+mpp_enc_cfg_set_s32(cfg, "rc:gop",        gop);
+mpp_enc_cfg_set_s32(cfg, "rc:fps_in_num", 30); mpp_enc_cfg_set_s32(cfg,"rc:fps_in_denorm",1);
+mpp_enc_cfg_set_s32(cfg, "rc:fps_out_num",30); mpp_enc_cfg_set_s32(cfg,"rc:fps_out_denorm",1);
+mpp_enc_cfg_set_s32(cfg, "codec:type", MPP_VIDEO_CodingHEVC);
+mpi->control(ctx, MPP_ENC_SET_CFG, cfg);
+mpi->control(ctx, MPP_ENC_GET_HDR_SYNC, header_packet); <span class="cm">// 先写 VPS/SPS/PPS</span></pre></div>
+          <div class="codewrap"><div class="codebar"><span class="b b1"></span><span class="b b2"></span><span class="b b3"></span><span class="fn">帧循环：喂 NV12 → 取压缩码流</span><button class="copy">复制</button></div>
+<pre>mpp_buffer_get(grp, &buf, frame_size);
+<span class="cm">// 将 V4L2 的 Y、UV 两平面逐行复制进 MPP 对齐的 NV12 缓冲</span>
+copy_nv12_rows(mpp_buffer_get_ptr(buf), y_plane, uv_plane, source_pitch, aligned_pitch);
+mpp_frame_init(&frm);
+mpp_frame_set_buffer(frm, buf);
+mpp_frame_set_width/height/hor_stride/ver_stride(frm, ...);
+mpp_frame_set_fmt(frm, MPP_FMT_YUV420SP);
+mpp_frame_set_pts(frm, frame_index*1000000/fps);
+mpi->encode_put_frame(ctx, frm);                      <span class="cm">// 提交编码；按缓冲生命周期管理复用</span>
+mpp_frame_deinit(&frm);
+
+mpi->encode_get_packet(ctx, &pkt);                    <span class="cm">// 取 H.265 包；分片时循环至 EOI</span>
+fwrite(mpp_packet_get_pos(pkt), 1, mpp_packet_get_length(pkt), fp);
+mpp_packet_deinit(&pkt);</pre></div>
+        </div>
+      </div>
+
+      <div id="pane-v4l2" class="tab-pane">
+        <div class="card" style="border-radius:0 11px 11px 11px">
+          <h3 class="sub">从 /dev/video44 取 NV12 帧（V4L2 MMAP）</h3>
+          <p class="muted" style="margin-bottom:10px">本板 <code>/dev/video44</code> 是多平面采集节点，实际格式为 NV12M（fourcc <code>NM12</code>）。Y/UV 各有独立的 MMAP 缓冲与 <code>bytesperline</code>；逐行复制到 MPP 对齐缓冲后再编码，不能把两平面当作一块连续内存。下方是调用顺序示意，完整可编译代码在 <code>v4l2_mpp_enc.c</code>。</p>
+          <div class="codewrap"><div class="codebar"><span class="b b1"></span><span class="b b2"></span><span class="b b3"></span><span class="fn">V4L2 采集关键步骤</span><button class="copy">复制</button></div>
+<pre>fmt.type = V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE;
+fmt.fmt.pix_mp.width = w; fmt.fmt.pix_mp.height = h;
+fmt.fmt.pix_mp.pixelformat = V4L2_PIX_FMT_NV12M;
+ioctl(fd, VIDIOC_S_FMT, &fmt);
+y_pitch  = fmt.fmt.pix_mp.plane_fmt[0].bytesperline;
+uv_pitch = fmt.fmt.pix_mp.plane_fmt[1].bytesperline;
+
+req.type = V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE;
+req.count = 4; req.memory = V4L2_MEMORY_MMAP;
+ioctl(fd, VIDIOC_REQBUFS, &req);
+for (i=0;i&lt;req.count;i++){
+    b.length = 2; b.m.planes = planes;
+    ioctl(fd, VIDIOC_QUERYBUF, &b);
+    mmap_y_and_uv_separately(planes[0], planes[1]);
+    ioctl(fd, VIDIOC_QBUF, &b);
+}
+ioctl(fd, VIDIOC_STREAMON, &type);
+<span class="cm">// 主循环：DQBUF 取两平面 -> 逐行复制/送 MPP -> QBUF 归还</span>
+b.length = 2; b.m.planes = planes;
+ioctl(fd, VIDIOC_DQBUF, &b);
+h265_encoder_frame(... y, y_pitch, uv, uv_pitch ...);
+ioctl(fd, VIDIOC_QBUF, &b);</pre></div>
+          <div class="note info" style="margin-bottom:0"><b>零拷贝升级方向：</b>将 V4L2 导出的 dma-buf fd 通过 <code>mpp_buffer_import</code> 导入，再用 <code>mpp_frame_set_buffer</code> 绑定。需匹配 NV12 布局与 stride，并保证编码使用结束后才归还采集缓冲；当前代码包尚未实现此链路。</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== 8. 音频与推流 ===== -->
+<section id="avnet" class="alt">
+  <div class="wrap">
+    <div class="sec-head">
+      <div class="sec-no">08 / 音频与网络</div>
+      <h2>音频同步录制与实时推流</h2>
+      <p>视频走硬件编码，音频走 ALSA + 软编 AAC（数据量小，CPU 占用可忽略），在 mux 元件按时间戳同步。</p>
+    </div>
+    <div class="grid2">
+      <div class="card">
+        <h3 class="sub">音视频同步录 MP4</h3>
+        <div class="codewrap" style="margin:0"><pre>gst-launch-1.0 -e \
+  v4l2src device=/dev/video44 num-buffers=600 \
+  ! video/x-raw,format=NV12,width=1920,height=1080,framerate=30/1 \
+  ! mpph264enc ! h264parse ! queue ! mp4mux name=mux faststart=true \
+  ! filesink location=av.mp4 \
+  alsasrc device=hw:0,0 \
+  ! audio/x-raw,rate=44100,channels=2 \
+  ! audioconvert ! voaacenc ! aacparse ! queue ! mux.</pre></div>
+        <p class="muted" style="margin-top:10px">AAC 编码器二选一：<a href="https://gstreamer.freedesktop.org/documentation/voaacenc/index.html" target="_blank" rel="noopener"><code>voaacenc</code>（GStreamer Bad Plug-ins）</a>或 <code>avenc_aac</code>。05 脚本会探测声卡和编码器，缺少时退化为纯视频。纯音频测试：<code>arecord -D plughw:0,0 -f cd -d 5 a.wav</code>。</p>
+        <div class="note warn"><b>录制结束方式：</b>05 脚本只限制视频帧数，音频源会持续采集，因此有音频时可能不会在 20 秒后自动退出。使用 Ctrl+C 让 <code>gst-launch-1.0 -e</code> 发送 EOS 并完成 MP4 封装；精确定时停止需后续统一控制两路源。参考 <a href="https://gstreamer.freedesktop.org/documentation/tools/gst-launch.html" target="_blank" rel="noopener">GStreamer 命令说明</a>。</div>
+      </div>
+      <div class="card">
+        <h3 class="sub">三种网络输出</h3>
+        <div class="tbl" style="border-radius:8px">
+          <table style="font-size:13px">
+            <colgroup><col style="width:20%"><col style="width:44%"><col style="width:36%"></colgroup>
+            <thead><tr><th>方式</th><th>管线要点</th><th>电脑端</th></tr></thead>
+            <tbody>
+              <tr><td><b>UDP/TS</b><br><span class="tag t-green">最快</span></td><td><code>mpegtsmux ! udpsink host=电脑IP port=5000</code></td><td>VLC 打开 <code>udp://@:5000</code></td></tr>
+              <tr><td><b>RTSP</b><br><span class="tag t-cyan">标准</span></td><td>gst-rtsp-server 的 test-launch，标准 URL、可多客户端</td><td>VLC <code>rtsp://板子IP:8554/test</code></td></tr>
+              <tr><td><b>RTMP</b></td><td><code>flvmux ! rtmpsink</code>，推直播平台/流媒体服务器</td><td>需 RTMP 服务端</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="muted" style="margin-top:10px">低延迟：CBR + 短 GOP（15）+ <code>sync=false</code> + 较小 udp buffer；局域网 UDP-TS 延迟通常数百毫秒级。</p>
+      </div>
+    </div>
+    <div class="note info" style="margin-top:20px"><b>RTSP 服务命令</b>（编译 gst-rtsp-server 后，04 脚本已内置）：<code>./test-launch "( v4l2src device=/dev/video44 ! video/x-raw,format=NV12,width=1920,height=1080,framerate=30/1 ! mpph264enc ! h264parse ! rtph264pay name=pay0 pt=96 )"</code></div>
+  </div>
+</section>
+
+<!-- ===== 9. 性能优化 ===== -->
+<section id="perf">
+  <div class="wrap">
+    <div class="sec-head">
+      <div class="sec-no">09 / 性能与优化</div>
+      <h2>让 4K 实时、低延迟、低 CPU 的关键设置</h2>
+      <p>按收益从高到低排列。所有吞吐结论以板子自测脚本的实测 fps/码率为准。</p>
+    </div>
+    <div class="grid2">
+      <div class="card">
+        <h3 class="sub">必做项</h3>
+        <ul class="tick">
+          <li><b>CPU 性能模式：</b><code>echo performance | tee /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor</code></li>
+          <li><b>全程 NV12：</b>RKISP 直接输出 NV12，编码器也收 NV12，避免任何 CPU 色彩转换</li>
+          <li><b>缩放交给 RGA：</b>4K 转 1080p 用硬件 videoscale/RGA，不要软件 videoconvert</li>
+          <li><b>stride 对齐：</b>水平 16、垂直 16 对齐，直接采用 V4L2 返回的 bytesperline</li>
+          <li><b>CBR + 合理码率：</b>1080p≈4Mbps、4K≈12Mbps 起步，按画质实测调整</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3 class="sub">进阶项（多路 / 4K / 产品化）</h3>
+        <ul class="tick">
+          <li><b>dma-buf 零拷贝：</b>V4L2 与 MPP 共享 fd，省每帧 memcpy（4K 单帧 11.9MB）</li>
+          <li><b>queue 防阻塞：</b>tee 支路加 <code>queue leaky=downstream</code>，显示慢不拖编码</li>
+          <li><b>低延迟：</b>缩短 GOP、关闭 B 帧、编码器 zerolatency、udp <code>sync=false</code></li>
+          <li><b>多路：</b>每路独立 v4l2src+mpph264enc 实例，VENC 支持多实例，实测路数受总吞吐约束</li>
+          <li><b>动态码率/ROI：</b>用 MPP <code>MPP_ENC_SET_RC_CFG</code>、ROI 接口按场景调画质</li>
+        </ul>
+      </div>
+    </div>
+    <div class="note warn"><b>已知坑（官方 FAQ）：</b>① 4K@30 流畅、4K@60 可能卡顿，必要时降帧或上 AFBC；② 该固件版本部分平台 RGA 可能异常，若 RGA 报错先用 videoconvert 兜底并以实测为准；③ 播放卡顿先查是否硬解（<code>echo 0x100 &gt; /sys/module/rk_vcodec/parameters/mpp_debug</code> 看日志）。</div>
+    <div class="card" style="margin-top:18px">
+      <h3 class="sub">实测与验收指标（脚本自动打印）</h3>
+      <div class="tbl" style="border-radius:8px">
+        <table style="font-size:13.2px">
+          <colgroup><col style="width:22%"><col style="width:30%"><col style="width:48%"></colgroup>
+          <thead><tr><th>指标</th><th>怎么测</th><th>合格参考</th></tr></thead>
+          <tbody>
+            <tr><td>编码帧率</td><td>程序末行 fps / fpsdisplaysink</td><td>稳定接近 30fps，无明显掉帧</td></tr>
+            <tr><td>实际码率</td><td>码流字节数×8/时长</td><td>CBR 贴近 bps_target 设定值</td></tr>
+            <tr><td>CPU 占用</td><td><code>top</code> 看编码进程</td><td>硬编单路应很低（个位数~十几%）</td></tr>
+            <tr><td>端到端延迟</td><td>手机秒表对拍屏幕</td><td>UDP-TS 数百 ms；可按需进一步压缩</td></tr>
+            <tr><td>画质</td><td>VLC/ffplay 主观 + 码率扫描</td><td>无块效应、运动场景不糊</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== 10. 交付清单 ===== -->
+<section id="files" class="alt">
+  <div class="wrap">
+    <div class="sec-head">
+      <div class="sec-no">10 / 交付清单</div>
+      <h2>代码包与官方文档</h2>
+      <p>代码包已解压到当前工作目录。先按 <a href="#start">解压与部署</a> 将 <code>board/</code> 内容推送到板端 <code>/userdata/av_dev/</code>，再逐项验证。</p>
+    </div>
+    <div class="card">
+      <div class="fileitem"><span class="fico">FFmpeg</span><div><div class="fnm">ffmpeg_pipeline/build_runtime.sh / versions.json / patches/</div><div class="fd">锁定 FFmpeg、MPP、RGA 与 MediaMTX，四任务板端编译，修复 NV12M 平面、偏移与 stride；私有运行库</div></div></div>
+      <div class="fileitem"><span class="fico">control</span><div><div class="fnm">ffmpeg_pipeline/avctl.py / install_services.sh / mediamtx.yml</div><div class="fd">JSON 控制、实际状态、HDMI、MP4 封口、JPEG、日志与恢复；systemd 管理，未设置开机自启</div></div></div>
+      <div class="fileitem"><span class="fico">tests</span><div><div class="fnm">ffmpeg_pipeline/tests/ / docs/</div><div class="fd">NV12M 与控制测试、十次启停、RTSP 重启、30 分钟采样；完整指南、验收数据和上位机设计</div></div></div>
+      <div class="fileitem"><span class="fico">deploy</span><div><div class="fnm">tools/deploy/deploy.ps1</div><div class="fd">电脑端逐个推送代码并检查结果；不自动切换直播或编译 FFmpeg；C 编译需显式加 -BuildExamples</div></div></div>
+      <div class="fileitem"><span class="fico">step 0</span><div><div class="fnm">00_env_check.sh</div><div class="fd">环境自检：MPP 节点/库、GStreamer rockchip 插件、V4L2、RGA、音频，并给出缺失安装命令</div></div></div>
+      <div class="fileitem"><span class="fico">step 1</span><div><div class="fnm">01_mpp_selftest.sh</div><div class="fd">MPP 彩条硬编自测（无需摄像头）：H.264/H.265/JPEG + 4K 压测，打印 fps/码率</div></div></div>
+      <div class="fileitem"><span class="fico">step 2</span><div><div class="fnm">02_gst_encode_selftest.sh</div><div class="fd">GStreamer 测试图案硬编（无需摄像头）：1080p/4K → MP4/TS，吞吐统计</div></div></div>
+      <div class="fileitem"><span class="fico">step 3</span><div><div class="fnm">03_cam_encode.sh</div><div class="fd">摄像头实时采集 → H.264/H.265 硬编 → MP4，可同时预览，参数化节点/分辨率/码率/时长</div></div></div>
+      <div class="fileitem"><span class="fico">step 4</span><div><div class="fnm">04_cam_stream.sh</div><div class="fd">实时推流：UDP/TS（VLC 直拉）与 RTSP（test-launch 模板）</div></div></div>
+      <div class="fileitem"><span class="fico">step 5</span><div><div class="fnm">05_av_record.sh</div><div class="fd">视频硬编 + es8388 音频 AAC，音画同步录 MP4，自动探测音频设备</div></div></div>
+      <div class="fileitem"><span class="fico">live</span><div><div class="fnm">07_h265_preview_tcp.sh</div><div class="fd">IMX415 NV12 → tee → HDMI 预览 + H.265 TCP 5000；占用检查，不自动停进程</div></div></div>
+      <div class="fileitem"><span class="fico">status</span><div><div class="fnm">tools/deploy/refresh_status.ps1 / board_status.js</div><div class="fd">从 ADB 生成带采样时间的本地运行状态快照，供本网页显示</div></div></div>
+      <div class="fileitem"><span class="fico">C 源码</span><div><div class="fnm">v4l2_mpp_enc/mpp_h265.h + mpp_h265.c</div><div class="fd">共用 MPP 编码引擎：H.265 CBR/GOP 配置、对齐拷贝、逐帧提交/取包与码流写入</div></div></div>
+      <div class="fileitem"><span class="fico">C 源码</span><div><div class="fnm">v4l2_mpp_enc/yuv_mpp_enc.c</div><div class="fd">打包 NV12 文件 → MPP H.265 裸码流；无摄像头时可独立验证</div></div></div>
+      <div class="fileitem"><span class="fico">C 源码</span><div><div class="fnm">v4l2_mpp_enc/v4l2_mpp_enc.c</div><div class="fd">V4L2 双平面 NV12M MMAP 采集 → MPP H.265 逐帧硬编 → 裸码流文件</div></div></div>
+      <div class="fileitem"><span class="fico">build</span><div><div class="fnm">v4l2_mpp_enc/Makefile</div><div class="fd">使用板端 /usr/include/rockchip 与 librockchip_mpp.so 编译两个程序，部署到独立 mpp_route2 目录</div></div></div>
+    </div>
+    <div class="note info" style="margin-top:18px"><b>本地 SDK 官方文档：</b>位于 <code>reference/rockchip_sdk/evm3588_linux_v1.0.3/docs/Linux/Multimedia/</code>，可直接打开 <a href="../reference/rockchip_sdk/evm3588_linux_v1.0.3/docs/Linux/Multimedia/Rockchip_Developer_Guide_MPP_CN.pdf">MPP 开发指南</a>、<a href="../reference/rockchip_sdk/evm3588_linux_v1.0.3/docs/Linux/Multimedia/Rockchip_User_Guide_Linux_Gstreamer_CN.pdf">GStreamer 使用指南</a>、<a href="../reference/rockchip_sdk/evm3588_linux_v1.0.3/docs/Linux/Multimedia/Rockchip_Developer_Guide_RGA_CN.pdf">RGA 开发指南</a>、<a href="../reference/rockchip_sdk/evm3588_linux_v1.0.3/docs/Linux/Multimedia/Rockchip_User_Guide_Linux_Rockit_CN.pdf">Rockit 使用指南</a>。这些 PDF 未包含在代码 ZIP 内；当前目录未发现 EVM3588-B Linux 使用手册 V1.2，请另从板卡资料中获取。</div>
+  </div>
+</section>
+
+<!-- ===== 11. FAQ ===== -->
+<section id="faq">
+  <div class="wrap">
+    <div class="sec-head">
+      <div class="sec-no">11 / 故障排查</div>
+      <h2>常见问题</h2>
+    </div>
+    <div class="grid2">
+      <div class="card">
+        <h3 class="sub">打不开 /dev/video44 / No sensor attached</h3>
+        <p class="muted">IMX415 已连接时仍出现 “No sensor attached”，应检查 sensor 驱动识别、所接接口与固件配置，以及 rkaiq / ISP 链路。先按 <a href="#camera-start">IMX415 验证步骤</a> 确认实际采集节点；若需重新插拔排线，先断电。不要仅凭 video44 节点存在判断连接正常。</p>
+      </div>
+      <div class="card">
+        <h3 class="sub">没有 mpph265enc 插件</h3>
+        <p class="muted">当前板子上已通过 <code>gst-inspect-1.0 mpph265enc</code> 检出 Rockchip 插件。换固件后若缺失，先跑 00 自检，检查 GStreamer Rockchip 插件包或 SDK 中的实现。</p>
+      </div>
+      <div class="card">
+        <h3 class="sub">编译报找不到 rk_mpi.h</h3>
+        <p class="muted">当前板子已有 <code>librockchip-mpp-dev</code>，头文件位于 <code>/usr/include/rockchip</code>。换板或固件时先核对头文件与运行库版本，再安装该开发包；当前路线二 Makefile 不使用 RGA。</p>
+      </div>
+      <div class="card">
+        <h3 class="sub">无显示器怎么编码</h3>
+        <p class="muted">03 脚本检测到无 DISPLAY/Wayland 会自动用 fakesink，只录文件不弹窗，可全程 ssh/adb shell 运行。</p>
+      </div>
+      <div class="card">
+        <h3 class="sub">电脑 VLC 拉不到 UDP 流</h3>
+        <p class="muted">确认 host 填电脑 IP（192.168.2.165）、与板子同网段；Windows 防火墙放行 VLC/UDP 5000；VLC 打开 <code>udp://@:5000</code> 后再启动推流。</p>
+      </div>
+      <div class="card">
+        <h3 class="sub">4K 卡顿 / 掉帧</h3>
+        <p class="muted">开 performance 调速；确认走的是硬编（top 中 CPU 应很低）；缩到 1080p 用 RGA；4K60 官方不保证，按 30fps 设计；必要时上 dma-buf 零拷贝。</p>
+      </div>
+    </div>
+    <div class="note info" style="margin-top:20px"><b>当前进度：</b>FFmpeg 直接采集 → VPU H.265 → RTSP → 两端播放、MP4 和截图已跑通；Windows 桌面控制台已实现并打包。界面可看实时视频、控制相机链路并下载录像，网页仍展示带时间的状态快照。镜头到屏幕的端到端延迟待专门测量。</div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <div>EVM3588-B（RK3588）摄像头视频流实时硬件压缩 · 音视频开发方案</div>
+    <div class="mono" style="margin-top:7px">参考：本地 SDK 的 MPP / GStreamer / RGA 指南 · 2026-10-12 更新 H.265 主链路与板端状态快照</div>
+  </div>
+</footer>
+
+<script src="board_status.js"></script>
+<script>
+// 本地 HTML 只能读取刷新脚本写入的状态文件；采样过期时不展示为“在线”。
+(function(){
+  var s=window.EVM3588Status;
+  var sample=document.getElementById('status-sample');
+  if(!s){
+    sample.textContent='未找到 board_status.js；在电脑 PowerShell 运行 tools/deploy/refresh_status.ps1 后刷新页面。';
+    document.querySelectorAll('.runtime-item .value').forEach(function(el){el.textContent='无采样';});
+    return;
+  }
+  function render(){
+    var age=Date.now()-Number(s.sampledAtEpochMs || 0);
+    var fresh=age>=0 && age<=5*60*1000;
+    sample.textContent='采样时间：'+s.sampledAt+' · ADB 序列号：'+s.adbSerial+' · 板子 IPv4：'+(s.boardIp || '未检测到')+(fresh?' · 快照有效':' · 快照已过期，请重新采样');
+    function set(id, good, yes, no){
+      var el=document.getElementById(id), item=el.parentElement;
+      item.classList.remove('unknown','good','bad');
+      if(!fresh){item.classList.add('unknown');el.textContent='快照已过期';return;}
+      item.classList.add(good?'good':'bad');
+      el.textContent=good?yes:no;
+    }
+    set('status-adb',!!s.adbSerial,'已连接','未连接');
+    var ff=s.pipelineType==='ffmpeg';
+    document.getElementById('status-encoder-label').textContent=ff?'FFmpeg H.265 / RTSP 8554':'GStreamer H.265 / TCP 5000';
+    set('status-camera',!!s.cameraOwnedByListener,'由编码器占用','未确认占用');
+    set('status-encoder',!!s.h265Pipeline && !!s.portListening && (!ff || !!s.streamReady),ff?'hevc_rkmpp 正在发布':'H.265 已监听','未检测到活动码流');
+    set('status-preview',!!s.previewBranchConfigured,ff?'HDMI 播放器运行':'预览分支已配置','预览未运行');
+    set('status-client',!!s.tcpClientConnected,'远程客户端已连接','暂无远程连接');
+    set('status-vpu',ff && !!s.hardwareDeviceOpen, '/dev/mpp_service 已打开',ff?'未检测到设备访问':'原管线不采集此项');
+    set('status-fps',ff && Number(s.fps)>0,Number(s.fps).toFixed(1)+' fps · '+String(s.frame || 0)+' 帧',ff?'暂无帧进度':'原管线不采集此项');
+    set('status-record',ff, s.recording?'正在录制 MP4':'未录像 · 可按需开始','原管线不采集此项');
+  }
+  render();
+  setInterval(render,30000);
+})();
+// tab 切换
+document.querySelectorAll('.tabs').forEach(function(tabs){
+  tabs.querySelectorAll('.tab-btn').forEach(function(btn){
+    btn.addEventListener('click',function(){
+      var group=btn.closest('.tab-group');
+      group.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+      group.querySelectorAll('.tab-pane').forEach(p=>p.classList.remove('active'));
+      btn.classList.add('active');
+      group.querySelector('#'+btn.dataset.tab).classList.add('active');
+    });
+  });
+});
+// 为命令块补上复制按钮，支持本地 file:// 打开时的兼容方式。
+document.querySelectorAll('.codewrap').forEach(function(wrap){
+  if(wrap.querySelector('.copy') || wrap.querySelector('.quick-tree')) return;
+  var bar=wrap.querySelector('.codebar');
+  if(!bar){
+    bar=document.createElement('div');
+    bar.className='codebar';
+    var label=document.createElement('span');
+    label.className='fn'; label.textContent='命令 / 代码';
+    bar.appendChild(label); wrap.insertBefore(bar,wrap.firstChild);
+  }
+  var btn=document.createElement('button');
+  btn.type='button'; btn.className='copy'; btn.textContent='复制';
+  bar.appendChild(btn);
+});
+function fallbackCopy(value){
+  var active=document.activeElement;
+  var input=document.createElement('textarea');
+  input.value=value; input.setAttribute('readonly','');
+  input.style.cssText='position:fixed;left:-9999px;top:0;opacity:0';
+  document.body.appendChild(input);
+  var copied=false;
+  try{
+    input.focus({preventScroll:true}); input.select();
+    copied=document.execCommand('copy');
+  }finally{
+    input.remove();
+    if(active && active.focus) active.focus({preventScroll:true});
+  }
+  if(!copied) throw new Error('Clipboard unavailable');
+}
+document.querySelectorAll('.copy').forEach(function(btn){
+  btn.type='button'; btn.setAttribute('aria-label','复制此代码块');
+  btn.setAttribute('aria-live','polite');
+  btn.addEventListener('click',async function(){
+    var value=btn.closest('.codewrap').querySelector('pre').innerText;
+    clearTimeout(btn.resetTimer);
+    try{
+      try{
+        if(!navigator.clipboard || !navigator.clipboard.writeText) throw new Error('Clipboard unavailable');
+        await navigator.clipboard.writeText(value);
+      }catch(error){ fallbackCopy(value); }
+      btn.textContent='已复制';
+      btn.title='代码已复制到剪贴板';
+    }catch(error){
+      btn.textContent='请手动复制';
+      btn.title='浏览器限制剪贴板访问，请选中代码后按 Ctrl+C';
+    }
+    btn.resetTimer=setTimeout(function(){btn.textContent='复制';btn.title='';},1800);
+  });
+});
+</script>
+</body>
+</html>

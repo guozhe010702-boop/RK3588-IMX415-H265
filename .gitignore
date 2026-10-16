@@ -1,24 +1,16 @@
-# Vendor SDK and board documents are kept locally.
-/evm3588_linux_v1.0.3/
-
-# Regenerable delivery copies and archives.
-/音视频代码包/
-/*.zip
-/*.zip.sha256
-
-# Local backup/reference, browser profile and extraction checks.
-/backups/
-/_board_reference/
-/_shots/
-/test_unzip/
-/_work_ffmpeg/
-/_work_desktop/
+# Local dependencies, SDK/reference documents, generated artifacts and caches.
 /.venv-desktop/
-/desktop/build/
-/desktop/dist/
-/desktop/vendor/
+/.cache/
 /.pytest_cache/
+/reference/rockchip_sdk/
+/desktop/vendor/
+/releases/*
+!/releases/README.md
+/web/board_status.js
 *.bundle
+__pycache__/
+
+# Board runtime and user data.
 /board/ffmpeg_pipeline/runtime/
 /board/ffmpeg_pipeline/build/
 /board/ffmpeg_pipeline/state/
@@ -27,10 +19,7 @@
 /board/ffmpeg_pipeline/snapshots/
 /board/ffmpeg_pipeline/config.json
 
-# Generated board state may contain IPs, PIDs and device IDs.
-/board_status.js
-
-# Build artifacts and camera recordings.
+# Build products, recordings and media.
 *.o
 *.a
 *.so
@@ -43,10 +32,7 @@
 *.mkv
 *.ts
 *.log
-/board/v4l2_mpp_enc/yuv_mpp_enc
-/board/v4l2_mpp_enc/v4l2_mpp_enc
-
-# Tool/editor state.
-__pycache__/
+/examples/mpp_c_api/yuv_mpp_enc
+/examples/mpp_c_api/v4l2_mpp_enc
 .DS_Store
 Thumbs.db

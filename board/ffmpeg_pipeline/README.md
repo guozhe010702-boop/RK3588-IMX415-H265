@@ -19,6 +19,6 @@
 
 程序有两种运行方式：一次性的 SSH CLI 把请求送到 `state/control.sock`；systemd 启动的 `_serve` 常驻进程拥有 Controller 和子进程。每次查状态不会重新打开相机。
 
-本轮源码结构重构没有覆盖当前开发板的运行目录。后续上传时必须同步 `avctl.py` 与整个 `camera_control/`，根目录 `deploy.ps1` 已按目录递归收集 Python 文件；不要只复制新的入口文件。
+本轮源码结构重构没有覆盖当前开发板的运行目录。后续上传时必须同步 `avctl.py` 与整个 `camera_control/`，根目录 `tools/deploy/deploy.ps1` 已按目录递归收集 Python 文件；不要只复制新的入口文件。
 
-运行与接口详解见 [项目程序逻辑](../../docs/项目程序逻辑与目录导航.md)，实际操作见 [FFmpeg 指南](../../docs/FFmpeg_全链路操作指南.md)。
+运行与接口详解见 [项目程序逻辑](../../docs/architecture/项目程序逻辑与目录导航.md)，实际操作见 [FFmpeg 指南](../../docs/guides/FFmpeg_全链路操作指南.md)。

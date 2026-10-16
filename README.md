@@ -1,78 +1,80 @@
-# RK3588 / IMX415 相机项目
+# av_dev — RK3588 / IMX415 相机项目
 
-**先读 [项目程序逻辑与目录导航](docs/项目程序逻辑与目录导航.md)。** 这份阅读地图说明每个目录、视频/控制/文件三条链路、按钮调用顺序、运行状态，以及修改功能应该定位哪个模块。
+主程序是 **Windows 桌面控制台 + RK3588 FFmpeg/VPU 控制服务**。IMX415/con7 经 `/dev/video44` 采集，硬编后通过 RTSP 提供电脑预览、HDMI、录像和截图。
 
-当前产品由 Windows 桌面控制台、板端 FFmpeg / RK3588 VPU 和 MediaMTX 组成。IMX415 接 EVM3588-B con7，经 `/dev/video44` NV12M 采集，H.265 硬编后通过 RTSP 同时提供 HDMI、电脑预览、手动 MP4 录像和 JPEG 截图。
-
-默认 1920×1080、30 fps、H.265 CBR 2.5 Mbit/s、GOP 30、无音频。H.264 可在界面选择。MPP C API 与 GStreamer 方案保留用于学习和对照，当前产品不依次运行编号脚本。
-
-## 按目的找入口
-
-| 目的 | 入口 |
-| --- | --- |
-| 理解程序、目录和调用顺序 | [项目程序逻辑](docs/项目程序逻辑与目录导航.md) |
-| 查看本次结构拆分和验证 | [结构整理记录](docs/项目结构整理记录.md) |
-| 使用已发布的桌面软件 | [Windows 操作指南](docs/Windows_相机控制台操作指南.md) |
-| 部署、构建和底层命令 | [FFmpeg 全链路指南](docs/FFmpeg_全链路操作指南.md) |
-| 查看板端代码分类 | [board/README.md](board/README.md) |
-| 查看桌面模块分类 | [desktop/README.md](desktop/README.md) |
-| 学习 V4L2 / MPP C API | [路线二指南](docs/路线二_MPP_C_API_操作与修改指南.md) |
-| 找其它设计、调研和历史验收 | [文档目录](docs/README.md) |
-| 查看方案与手动采样状态 | [方案网页](EVM3588-B_音视频实时压缩方案.html) |
-
-## 源码结构
+## 目录与入口
 
 ```text
-board/
-  ffmpeg_pipeline/          当前板端产品
-    avctl.py               稳定 CLI 入口
-    camera_control/        配置、辅助函数、生命周期、服务通信、CLI 实现
-    patches/               NV12M 采集兼容补丁
-    tests/                 单元与硬件验收
-  v4l2_mpp_enc/             MPP C API 学习代码
-  00_...07_...sh            环境检查与原 GStreamer 方案
-desktop/
-  main.py                  Windows 应用入口
-  evm_console/             界面布局、业务协调、SSH、视频、文件与本地回放
-  tests/                   桌面单元与运行监测
-docs/                      Markdown 编辑源、生成的 HTML、历史验收
-tools/                     文档、交付和验证工具
-deploy.ps1                 Windows 上传板端源码
-refresh_status.ps1         Windows 生成网页状态快照
+av_dev/
+├─ README.md                  从这里开始
+├─ board/                     当前板端程序
+│  ├─ ffmpeg_pipeline/         avctl.py、控制模块、配置、构建和测试
+│  └─ diagnostics/            环境与编码器检查
+├─ desktop/                   Windows 主程序：main.py、evm_console/、tests/
+├─ examples/                  学习代码，与主程序分开
+│  ├─ mpp_c_api/              V4L2 → MPP C API
+│  └─ gstreamer/              原 GStreamer 示例
+├─ tools/                     按用途分类的开发工具
+│  ├─ deploy/                 部署、网页状态采样
+│  ├─ docs/                   Markdown 链接与命令检查
+│  ├─ release/                源码 ZIP 打包
+│  ├─ dev/                    FFmpeg 补丁生成
+│  └─ tests/                  RTSP 客户端验证
+├─ docs/                      Markdown 文档，不再生成多套网页
+│  ├─ architecture/           程序逻辑与设计参考
+│  ├─ guides/                 操作指南
+│  ├─ history/                历史验收与版本记录
+│  └─ assets/                 架构图
+├─ web/                       唯一网页 index.html 与状态脚本
+├─ releases/                  EXE ZIP、源码 ZIP（本地交付物）
+└─ reference/                 SDK 与厂商资料（本地参考）
 ```
 
-根目录 `board/`、`desktop/` 是修改源。`音视频代码包/` 和源码 ZIP 是生成副本；`desktop/dist/`、EXE ZIP 是构建产物。修改源码不会自动修改电脑 EXE 或板端运行实例。
+`.venv-desktop/` 是现有独立 Python 环境；`.cache/` 用于可重新生成的构建缓存。二者不作为源码提交。
 
-## 当前交付与本次整理
+| 目的 | 位置 |
+| --- | --- |
+| 阅读核心逻辑和模块职责 | [项目程序逻辑](docs/architecture/项目程序逻辑与目录导航.md) |
+| 修改 Windows 程序 | [desktop](desktop/README.md)，入口 `desktop/main.py` |
+| 修改板端程序 | [FFmpeg 控制服务](board/ffmpeg_pipeline/README.md)，入口 `avctl.py` |
+| 使用桌面软件 | [桌面操作指南](docs/guides/Windows_相机控制台操作指南.md) |
+| 部署与命令行操作 | [FFmpeg 指南](docs/guides/FFmpeg_全链路操作指南.md) |
+| 学习 MPP / GStreamer | [examples](examples/README.md) |
+| 查看方案和采样状态 | [唯一网页](web/index.html) |
+| 找其它说明或历史实测 | [文档目录](docs/README.md) |
 
-已发布桌面包为本地 `EVM3588CameraConsole-Windows-x64-v1.1.0.zip`。完整解压后双击 EXE，首次连接填写自己的 SSH 密码或密钥；无需安装 Python。
+## 开发时使用
 
-本轮是源码结构重构：拆开板端 `avctl.py` 的多种职责，分离桌面布局与本地回放，统一代码排版并建立导航。**没有新增功能、重新发布 EXE 或覆盖开发板运行目录。** 原接口、动作名称与 JSON 调用方式继续使用。
-
-后续需要部署新结构时，入口文件与 `camera_control/` 必须一起上传；`deploy.ps1` 已递归收集 Python 模块。本轮未执行部署。
-
-## 最小命令入口
-
-**开发板 Bash**，查询现有状态：
-
-```bash
-python3 /userdata/av_dev/ffmpeg_pipeline/avctl.py status
-```
-
-解释：`python3` 执行板端 CLI；`status` 查询常驻服务并返回 JSON，不重新打开摄像头。
-
-**电脑 PowerShell，项目根目录**，上传源码时使用：
+以下命令都在 **电脑 PowerShell，av_dev 根目录**执行。
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\deploy.ps1
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\desktop\run.ps1
 ```
 
-解释：`powershell.exe` 启动子进程；`-NoProfile` 不加载个人配置；`-ExecutionPolicy Bypass` 仅对本次进程放行；`-File` 指定上传脚本。它不会自动编译或切换管线。其余命令与参数按用途查完整指南。
+解释：启动源码桌面程序；`-NoProfile` 不加载个人配置，`-ExecutionPolicy Bypass` 仅对本次进程放行，`-File` 指定脚本。使用现有 `.venv-desktop`，首次安装见操作指南。
 
-## 运行数据与备份
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\tools\deploy\deploy.ps1 -ListOnly
+```
 
-板端运行根目录为 `/userdata/av_dev/ffmpeg_pipeline/`。配置、私有库、状态、日志、MP4 和 JPEG 分目录存放；电脑个人配置在 `%LOCALAPPDATA%\EVM3588CameraConsole\`，保存的密码在 Windows 凭据管理器。
+解释：`-ListOnly` 只列出将上传的本地和板端路径，不连接或修改开发板。去掉该参数才真正上传；默认上传主程序和诊断脚本，学习示例需显式加 `-IncludeExamples`，编译 MPP 示例用 `-BuildExamples`。
 
-网页状态由 `refresh_status.ps1` 手动生成，页面显示采样时间；浏览器不直接控制 SSH 或播放 RTSP。真实凭据、媒体、运行快照、备份、SDK 和构建产物不上传 GitHub。
+```powershell
+.\.venv-desktop\Scripts\python.exe -B -m pytest .\desktop\tests -q -p no:cacheprovider
+```
 
-本轮备份为 `backups/before_structure_refactor_20261013/source.zip`，Git 标签为 `before-structure-refactor-20261013`。历史验收对应当时版本，不作为新结构的硬件部署验收；各轮记录见文档导航。上游组件许可证以各自源码为准，本项目未另行声明整体开源许可证。
+解释：运行桌面回归；`-B` 不生成字节码缓存，`-q` 简洁输出，最后一组参数关闭 pytest 缓存。测试不启停真实开发板。
+
+```powershell
+python .\tools\release\package_project.py
+```
+
+解释：只生成 `releases/av_dev-source.zip`，不再复制一份可编辑的“音视频代码包”目录；源码仍只维护根目录这一份。
+
+## 本次清理的边界
+
+已清除重复解压目录、旧重复包、临时验证目录和构建缓存，移除重复 README.txt、文档 HTML 及 HTML 生成器。当前源码和最新 1.1.0 EXE 包已归位；本轮没有重新部署板端或重新发布 EXE。
+
+整理前完整 Git 历史、源码及历史验证材料已归档到相邻目录 `../av_dev_archive_20261016/`。归档不在项目内部，避免再次混入日常开发目录；操作明细在归档的 `migration.json`。源码改动见 Git 历史。
+
+开发板运行路径保持 `/userdata/av_dev/ffmpeg_pipeline/`，个人配置和录像位置不变。真实凭据、录像、SDK、状态快照和生成包不进入 GitHub。

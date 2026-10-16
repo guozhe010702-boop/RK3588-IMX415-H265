@@ -30,7 +30,7 @@ from PySide6.QtSvg import QSvgRenderer
 image=QImage(256,256,QImage.Format.Format_ARGB32); image.fill(0); painter=QPainter(image)
 QSvgRenderer(str(ROOT/'assets/camera.svg')).render(painter); painter.end(); image.save(str(ROOT/'vendor/camera.png'))
 command=[sys.executable,'-m','PyInstaller','--noconfirm','--onedir','--windowed','--name','EVM3588CameraConsole',
-         '--distpath',str(ROOT/'dist'/__version__),'--workpath',str(ROOT/'build'/__version__),'--specpath',str(ROOT/'build'/__version__),
+         '--distpath',str(ROOT.parent/'releases/desktop'/__version__),'--workpath',str(ROOT.parent/'.cache/desktop-build'/__version__),'--specpath',str(ROOT.parent/'.cache/desktop-build'/__version__),
          '--icon',str(ROOT/'vendor/camera.png'),'--add-data',str(ROOT/'assets')+';assets',
          '--add-data',str(ROOT/'THIRD_PARTY_NOTICES.md')+';.',
          '--hidden-import','keyring.backends.Windows','--exclude-module','PySide6.QtWebEngineCore',
@@ -38,7 +38,7 @@ command=[sys.executable,'-m','PyInstaller','--noconfirm','--onedir','--windowed'
          '--exclude-module','PySide6.QtQuick','--exclude-module','PySide6.QtPdf','--exclude-module','pytest',
          str(ROOT/'main.py')]
 subprocess.run(command,check=True,cwd=ROOT)
-delivery=ROOT/'dist'/__version__/'EVM3588CameraConsole'; ffmpeg=delivery/'ffmpeg'; ffmpeg.mkdir(exist_ok=True)
+delivery=ROOT.parent/'releases/desktop'/__version__/'EVM3588CameraConsole'; ffmpeg=delivery/'ffmpeg'; ffmpeg.mkdir(exist_ok=True)
 shutil.copy2(source,ffmpeg/'ffmpeg.exe')
 for name in ('README_PORTABLE.txt','THIRD_PARTY_NOTICES.md'): shutil.copy2(ROOT/name,delivery/name)
 shutil.copy2(ROOT/'vendor/build-manifest.json',delivery/'build-manifest.json')
@@ -52,7 +52,7 @@ for distribution in importlib.metadata.distributions():
 license_candidates=[source.parent/'LICENSE',source.parent.parent/'LICENSE',source.parent.parent/'LICENSE.txt']
 for candidate in license_candidates:
     if candidate.is_file(): shutil.copy2(candidate,licenses/'FFmpeg-LICENSE.txt'); break
-archive=ROOT.parent/f'EVM3588CameraConsole-Windows-x64-v{__version__}.zip'
+archive=ROOT.parent/'releases'/f'EVM3588CameraConsole-Windows-x64-v{__version__}.zip'
 with ZipFile(archive,'w',ZIP_DEFLATED,compresslevel=6) as out:
     for file in delivery.rglob('*'):
         if file.is_file(): out.write(file,file.relative_to(delivery.parent).as_posix())

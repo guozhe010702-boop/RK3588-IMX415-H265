@@ -1,8 +1,8 @@
 # EVM3588 Camera Console
 
-Windows 中文桌面客户端：PySide6 界面、Paramiko SSH/SFTP、独立 FFmpeg 解码。使用说明见 [桌面操作指南](../docs/Windows_相机控制台操作指南.md)。免安装 ZIP 在项目根目录本地生成，不提交 Git。
+Windows 中文桌面客户端：PySide6 界面、Paramiko SSH/SFTP、独立 FFmpeg 解码。使用说明见 [桌面操作指南](../docs/guides/Windows_相机控制台操作指南.md)。免安装 ZIP 在 releases/ 本地生成，不提交 Git。
 
-先读 [项目程序逻辑与目录导航](../docs/项目程序逻辑与目录导航.md)，再按 `main.py` → `window.py` → 三个后台 worker 阅读。电脑不导入 Linux 专用板端模块，通过固定 CLI 与 JSON 标准输入交互。
+先读 [项目程序逻辑与目录导航](../docs/architecture/项目程序逻辑与目录导航.md)，再按 `main.py` → `window.py` → 三个后台 worker 阅读。电脑不导入 Linux 专用板端模块，通过固定 CLI 与 JSON 标准输入交互。
 
 | 模块 | 职责 |
 | --- | --- |
@@ -21,3 +21,5 @@ Windows 中文桌面客户端：PySide6 界面、Paramiko SSH/SFTP、独立 FFmp
 板端安装路径固定为 `/userdata/av_dev/ffmpeg_pipeline/`；RTSP 读取 `8554/imx415`。默认单板单相机。密码和密钥由用户提供，应用退出不停止板端服务。
 
 每条源码运行、测试与打包命令的位置和解释均在操作指南。依赖锁定于 `requirements.lock.txt`；打包说明与依赖许可见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
+
+打包输出统一在 `releases/desktop/` 和 `releases/*.zip`，构建缓存在 `.cache/desktop-build/`。`vendor/ffmpeg/` 是源码运行时的本地解码依赖，保留但不提交。

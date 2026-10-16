@@ -15,7 +15,7 @@ EVM3588 相机控制台 1.1.0（Windows x64）
 关闭软件只关闭电脑端连接与预览，开发板直播和录像继续运行。
 
 板端需已安装本项目 FFmpeg 环境与 avctl.py；本软件不会刷机或自动构建板端运行库。
-详细图文说明：项目 docs/Windows_相机控制台操作指南.html。
+详细图文说明：项目 docs/guides/Windows_相机控制台操作指南.md。
 个人配置、日志和主机指纹保存在 %LOCALAPPDATA%\EVM3588CameraConsole\。
 录像、密码、私钥和运行记录不上传 GitHub。
 
