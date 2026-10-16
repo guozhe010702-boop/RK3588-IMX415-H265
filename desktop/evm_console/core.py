@@ -14,6 +14,8 @@ ACTIONS = {
     "stop",
     "preview-start",
     "preview-stop",
+    "decode-start",
+    "decode-stop",
     "record-start",
     "record-stop",
     "snapshot",
@@ -98,7 +100,8 @@ def save_preferences(connection, download_dir, auto_download):
     temp.replace(data_root() / "preferences.json")
 
 
-PREVIEW_PRESETS = {"流畅": (640, 15), "均衡": (960, 30), "清晰": (1280, 30)}
+PREVIEW_PRESETS = {"流畅": (640, 15), "均衡": (960, 30), "清晰": (1280, 30), "性能 60 fps": (1280, 60)}
+PERFORMANCE_CONFIG = dict(DEFAULT_CONFIG, width=3840, height=2160, fps=60, bitrate=20000000, gop=60)
 
 
 def load_preview_quality():
@@ -175,6 +178,7 @@ def explain_error(message):
         "Less than 1 GiB": "板端剩余空间不足 1 GiB，不能开始录像",
         "Stream is not ready": "直播尚未就绪，请等待出帧",
         "Connection refused": "连接被拒绝，请检查板子地址与服务",
+        "Controller service is not running": "板端控制服务未运行；SSH 已连接，可点击启动直播",
         "timed out": "连接或操作超时，请检查网络并查询状态",
         "Driver selected": "驱动没有采用请求的分辨率，已尝试恢复原直播",
         "different capture size": "驱动没有采用请求的分辨率，已尝试恢复原直播",
@@ -187,12 +191,16 @@ class FrameAssembler:
     def __init__(self, size):
         self.size = size
         self.buffer = bytearray()
+        self.complete_frames = 0
+        self.discarded_frames = 0
 
     def feed(self, chunk):
         self.buffer.extend(chunk)
         latest = None
         count = len(self.buffer) // self.size
         if count:
+            self.complete_frames += count
+            self.discarded_frames += count - 1
             offset = (count - 1) * self.size
             latest = bytes(self.buffer[offset : offset + self.size])
             del self.buffer[: count * self.size]

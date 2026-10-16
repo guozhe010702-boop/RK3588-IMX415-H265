@@ -7,9 +7,10 @@ The board's status response is authoritative for camera/recording lifecycle.
 from datetime import datetime
 from pathlib import Path
 import time
+import shutil
 import keyring
 from PySide6.QtCore import Qt, QTimer, QUrl
-from PySide6.QtGui import QDesktopServices, QPixmap
+from PySide6.QtGui import QDesktopServices, QPixmap, QGuiApplication
 from PySide6.QtWidgets import (
     QMainWindow,
     QVBoxLayout,
@@ -28,6 +29,7 @@ from .core import (
     data_root,
     PREVIEW_PRESETS,
     save_preview_quality,
+    PERFORMANCE_CONFIG,
 )
 from .ssh import SSHWorker, trust_host
 from .video import VideoWorker
@@ -35,14 +37,19 @@ from .files import FileWorker
 from .widgets import STYLE
 from .layout import build_ui, button
 from .playback import LocalVideoDialog
+from .telemetry import PerformanceWorker
+from .performance import number
 
 
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("EVM3588 相机控制台")
-        self.resize(1420, 900)
-        self.setMinimumSize(1060, 660)
+        self.setMinimumSize(960, 600)
+        screen = QGuiApplication.primaryScreen()
+        available = screen.availableGeometry() if screen else None
+        self.resize(max(960, min(1420, available.width() - 24)) if available else 1420,
+                    max(600, min(900, available.height() - 40)) if available else 900)
         self.setStyleSheet(STYLE)
         self.connection, self.download_dir, auto = load_preferences()
         self.board = {}
@@ -72,6 +79,11 @@ class MainWindow(QMainWindow):
         self.video = VideoWorker()
         self.files = FileWorker()
         build_ui(self, auto)
+        self.performance = PerformanceWorker(self.video, self.canvas)
+        self.performance.sample.connect(self.on_performance)
+        self.performance.failure.connect(lambda text: self.add_log('系统', '性能 CSV：' + text))
+        self.latest_performance = {}
+        self.performance.start()
         self.restore_saved_credential()
         self.connect_signals()
         self.ssh.start()
@@ -79,7 +91,7 @@ class MainWindow(QMainWindow):
         self.files.start()
         self.timer = QTimer(self)
         self.timer.setTimerType(Qt.TimerType.PreciseTimer)
-        self.timer.setInterval(33)
+        self.timer.setInterval(8)
         self.timer.timeout.connect(self.render_frame)
         self.timer.start()
         self.clock = QTimer(self)
@@ -115,6 +127,7 @@ class MainWindow(QMainWindow):
         self.files.busy.connect(self.on_file_busy)
 
     def select_page(self, index):
+        self.side_panel.setFixedWidth(500 if index == 4 else 350)
         self.pages.setCurrentIndex(index)
         for i, item in enumerate(self.tab_buttons):
             item.setChecked(i == index)
@@ -155,6 +168,7 @@ class MainWindow(QMainWindow):
             self.on_failure("connect", str(error))
 
     def disconnect_board(self):
+        self.performance.set_connected(False)
         self.want_board = False
         self.ssh.submit("disconnect")
         self.video.pause()
@@ -186,6 +200,7 @@ class MainWindow(QMainWindow):
         if self.closing or (connected and not self.want_board):
             return
         self.ssh_connected = connected
+        self.performance.set_connected(connected)
         self.badges["SSH"].set_state(connected, "已连接" if connected else "未连接")
         self.connection_note.setText(message)
         self.add_log("连接", message)
@@ -271,11 +286,26 @@ class MainWindow(QMainWindow):
         self.gop.setValue(config.get("gop", 30))
         self.device.setText(config.get("device", "/dev/video44"))
 
+    def fill_performance_preset(self):
+        if self.board.get('recording'):
+            self.on_failure('start', 'Stop and finalize recording')
+            return
+        c = PERFORMANCE_CONFIG
+        self.codec.setCurrentIndex(0)
+        self.width.setValue(c['width'])
+        self.height.setValue(c['height'])
+        self.fps.setValue(c['fps'])
+        self.bitrate.setValue(c['bitrate'] / 1e6)
+        self.gop.setValue(c['gop'])
+        self.preview_quality.setCurrentText('性能 60 fps')
+        self.message.setText('已填入 4K60；当前驱动待适配。可用 4K30 验证指标，不能当作 4K60 验收。')
+
     def on_status(self, status):
         if self.closing or not self.want_board:
             return
         previous = self.board
         self.board = status
+        self.performance.update_board(status, self.ssh_connected)
         ready = status.get("state") == "running"
         config = status.get("config", {})
         self.badges["VPU"].set_state(
@@ -288,12 +318,11 @@ class MainWindow(QMainWindow):
         self.badges["录像"].set_state(
             bool(status.get("recording")), "录制中" if status.get("recording") else "未录像"
         )
-        self.metrics["fps"].value.setText(f"{status.get('fps') or '—'} fps")
         actual = status.get("actualCapture") or {}
         width = actual.get("width", config.get("width", 1920))
         height = actual.get("height", config.get("height", 1080))
         self.metrics["size"].value.setText(f"{width}×{height}")
-        self.metrics["bitrate"].value.setText(f"{config.get('bitrate',0)/1000000:g} M")
+        self.metrics["bitrate"].value.setToolTip(f"配置目标码率 {config.get('bitrate',0)/1e6:g} Mbit/s；卡片显示实测 RTSP 流速")
         self.metrics["disk"].value.setText(f"{status.get('freeBytes',0)/1024**3:.1f} GiB")
         self.actual_text.setText(
             f"运行值：{config.get('codec','—').upper()} · {width}×{height}\n{config.get('fps','—')} fps · {config.get('bitrate',0)/1000000:g} Mbit/s · GOP {config.get('gop','—')}\n实际编码器：{status.get('encoder','—')}\n{'采集尺寸已确认' if actual else '采集尺寸等待板端报告'}"
@@ -317,6 +346,9 @@ class MainWindow(QMainWindow):
             self.add_log("编码", "历史事件：" + str(error.get("message", error)))
         if ready and not self.operation_busy and time.monotonic() >= self.error_until:
             self.message.setText("直播正常；可以截图、录像或修改编码参数。")
+        elif status.get('state') == 'stopped' and not self.operation_busy and time.monotonic() >= self.error_until:
+            self.message.setText('板端控制服务未运行；SSH 已连接，可点击启动直播。' if status.get('serviceRunning') is False
+                                 else '直播未启动；可以设置参数并启动直播。')
         self.update_controls()
         self.update_clock()
 
@@ -333,8 +365,8 @@ class MainWindow(QMainWindow):
             item = self.codec.model().item(1)
             item.setEnabled("h264_rkmpp" in result.get("encoders", []))
             self.add_log("系统", "板端硬编能力：" + ", ".join(result.get("encoders", [])))
-            if result.get("sensorFramesPerSecond"):
-                self.fps.setMaximum(min(60, int(result["sensorFramesPerSecond"])))
+            self.capability_note.setText('4K60：待驱动适配（未通过真实采集验收）\n传感器当前报告：' + str(result.get('sensorFramesPerSecond', '不可用')) + ' fps')
+            self.fps.setMaximum(60)
         elif action == "snapshot":
             self.files.submit("download", (result["file"], self.download_path.text()))
             self.files.submit("list")
@@ -428,19 +460,6 @@ class MainWindow(QMainWindow):
             self.fullscreen = None
 
     def update_clock(self):
-        now = time.monotonic()
-        before, decoded, displayed = self.rate_sample
-        elapsed = max(0.001, now - before)
-        if elapsed >= 0.8:
-            self.rate_sample = (now, self.video.frames, self.displayed_frames)
-        if elapsed >= 0.8 and self.video_state == "实时画面" and now - self.video.last_frame < 4:
-            startup = self.video.first_frame_seconds
-            suffix = f" · 首帧 {startup:.2f}s" if startup is not None else ""
-            self.preview_stats.setText(
-                f"电脑预览 {self.video.width}×{self.video.height} · 解码 {(self.video.frames-decoded)/elapsed:.1f} fps · 显示 {(self.displayed_frames-displayed)/elapsed:.1f} fps · 重连 {self.video.reconnects}{suffix}"
-            )
-        elif self.video_state != "实时画面":
-            self.preview_stats.setText("电脑预览：" + self.video_state)
         started = self.board.get("recordingStartedAt")
         if started:
             try:
@@ -452,6 +471,68 @@ class MainWindow(QMainWindow):
                 self.record_clock.setText("录像中")
         else:
             self.record_clock.setText("未录像 · 录像保存到板端，结束后可下载")
+
+    def on_performance(self, row):
+        if self.closing:
+            return
+        self.latest_performance = row
+        self.fps_trend.append(row)
+        self.flow_trend.append(row)
+        self.metrics['fps'].value.setText(number(row.get('encode_fps'), ' fps'))
+        self.metrics['bitrate'].value.setText(number(row.get('rtsp_mbps'), ' M'))
+        self.preview_stats.setText('电脑解码 ' + number(row.get('pc_decode_fps'), ' fps')
+            + ' · Qt 绘制 ' + number(row.get('qt_paint_fps'), ' fps')
+            + ' · 订阅流速 ' + number(row.get('pc_session_mbps'), ' Mbit/s')
+            + ' · ' + (row.get('bottleneck') or '每秒差分采样'))
+        self.performance_note.setText(('已过期' if row['board_stale'] else '指标正常')
+            + ' · 板端数据年龄 ' + number(row.get('board_age_s'), 's')
+            + '\n' + (row.get('bottleneck') or '十分钟趋势；进程 CPU 以一个逻辑核为 100%'))
+        pairs = [
+            ('采集 / 传感器', number(row.get('capture_fps'), ' fps') + ' / ' + number(row.get('sensor_fps'), ' fps')),
+            ('驱动序号缺口 / 错帧', number(row.get('capture_gaps'), digits=0) + ' / ' + number(row.get('capture_errors'), digits=0)),
+            ('板端硬解', (row.get('board_decode_size') or '不可用') + ' · ' + number(row.get('board_decode_fps'), ' fps')),
+            ('解码器 / VPU 设备', (row.get('board_decoder_name') or '不可用') + ' / ' + ('已打开' if row.get('board_decoder_vpu_open') else '未确认')),
+            ('板解状态 / 错误', ('运行' if row.get('board_decode_running') else '未运行') + ' / ' + (row.get('board_decode_error') or '无已报告错误')),
+            ('HDMI 输入 / 显示模式', (row.get('hdmi_size') or '不可用') + ' / ' + (row.get('monitor_mode') or '不可用')),
+            ('电脑解码 / 预览', (row.get('pc_decode_size') or '不可用') + ' / ' + (row.get('preview_size') or '不可用')),
+            ('预览丢弃 / 重连', str(row['preview_discarded']) + ' / ' + str(row['reconnects'])),
+            ('电脑解码错误日志条数', number(row.get('pc_decode_errors'), digits=0)),
+            ('目标 / 实测 RTSP', number(row.get('target_mbps')) + ' / ' + number(row.get('rtsp_mbps'), ' Mbit/s')),
+            ('网口 TX / RX', (row.get('nic_name') or '不可用') + ' · ' + number(row.get('nic_tx_mbps')) + ' / ' + number(row.get('nic_rx_mbps'), ' Mbit/s')),
+            ('链路 / TX 占用', number(row.get('link_mbps'), ' Mbit/s') + ' / ' + number(row.get('nic_tx_percent'), '%')),
+            ('板端 / 电脑 CPU', number(row.get('board_cpu_percent'), '%') + ' / ' + number(row.get('pc_cpu_percent'), '%')),
+            ('编码 / 板解内存', number(row.get('board_encoder_rss_mib')) + ' / ' + number(row.get('board_decoder_rss_mib'), ' MiB')),
+            ('编码 / 板解 CPU', number(row.get('board_encoder_cpu_percent'), '%') + ' / ' + number(row.get('board_decoder_cpu_percent'), '%')),
+            ('电脑解码 / 界面内存', number(row.get('pc_decoder_rss_mib')) + ' / ' + number(row.get('gui_rss_mib'), ' MiB')),
+            ('电脑解码 / 界面 CPU', number(row.get('pc_decoder_cpu_percent'), '%') + ' / ' + number(row.get('gui_cpu_percent'), '%')),
+            ('板端温度', number(row.get('board_temperature_c'), '℃')),
+            ('VPU 频率 Hz', row.get('vpu_frequencies') or '不可用'),
+            ('首帧等待 / 帧年龄', number(row.get('first_frame_s'), 's') + ' / ' + number(row.get('video_age_s'), 's')),
+        ]
+        self.performance_detail.setText('\n'.join(title + '：' + value for title, value in pairs)
+            + '\nCSV：' + (row.get('csv_path') or '等待写入')
+            + ('\n保存失败：' + row['csv_error'] if row.get('csv_error') else ''))
+
+    def choose_performance_folder(self):
+        folder = QFileDialog.getExistingDirectory(self, '选择性能 CSV 保存目录', str(self.performance.folder))
+        if folder:
+            self.performance.set_folder(folder)
+
+    def open_performance_folder(self):
+        QDesktopServices.openUrl(QUrl.fromLocalFile(str(self.performance.folder)))
+
+    def export_performance(self):
+        source = self.latest_performance.get('csv_path')
+        if not source:
+            self.message.setText('CSV 尚未生成')
+            return
+        target, _ = QFileDialog.getSaveFileName(self, '导出本次性能 CSV', Path(source).name, 'CSV (*.csv)')
+        if target and Path(target).resolve() != Path(source).resolve():
+            try:
+                shutil.copyfile(source, target)
+                self.message.setText('已导出截至当前采样的 CSV：' + target)
+            except OSError as error:
+                self.on_failure('export', str(error))
 
     def on_listing(self, rows):
         self.rows = rows
@@ -581,12 +662,13 @@ class MainWindow(QMainWindow):
             self.ssh.shutdown()
             self.video.shutdown()
             self.files.shutdown()
+            self.performance.shutdown()
             self.close_timer = QTimer(self)
             self.close_timer.setInterval(100)
             self.close_timer.timeout.connect(self.finish_close)
             self.close_timer.start()
         if (
-            any(worker.isRunning() for worker in (self.ssh, self.video, self.files))
+            any(worker.isRunning() for worker in (self.ssh, self.video, self.files, self.performance))
             or self.file_viewers
         ):
             event.ignore()
@@ -599,7 +681,7 @@ class MainWindow(QMainWindow):
 
     def finish_close(self):
         if (
-            not any(worker.isRunning() for worker in (self.ssh, self.video, self.files))
+            not any(worker.isRunning() for worker in (self.ssh, self.video, self.files, self.performance))
             and not self.file_viewers
         ):
             self.close()

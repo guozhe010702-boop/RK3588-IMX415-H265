@@ -52,6 +52,7 @@ def serve():
     server = socketserver.ThreadingUnixStreamServer(str(endpoint), Handler)
     server.daemon_threads = True
     server.controller = controller
+    controller.telemetry.start()
     os.chmod(endpoint, 0o600)
     threading.Thread(target=controller.monitor, daemon=True).start()
 
@@ -64,6 +65,7 @@ def serve():
         server.serve_forever(poll_interval=0.2)
     finally:
         controller.closed = True
+        controller.telemetry.stop_event.set()
         controller.stop()
         server.server_close()
         if endpoint.exists():
@@ -72,7 +74,7 @@ def serve():
 
 def request(action, payload):
     endpoint = ROOT / "state/control.sock"
-    if action in ("start", "preview-start"):
+    if action in ("start", "preview-start", "decode-start"):
         result = subprocess.run(
             ["systemctl", "start", "evm-mediamtx.service", "evm-ffmpeg-control.service"],
             capture_output=True,
@@ -87,12 +89,26 @@ def request(action, payload):
     if not endpoint.exists():
         if action == "check":
             return {"ok": True, "result": Controller().check()}
-        if action in ("status", "stop", "record-stop", "preview-stop"):
-            return {"ok": True, "result": {"state": "stopped", "recording": False}}
+        if action in ("status", "stop", "record-stop", "preview-stop", "decode-stop"):
+            return {"ok": True, "result": {"state": "stopped", "recording": False,
+                    "serviceRunning": False, "serviceMessage": "Controller service is not running"}}
         raise ControlError("Controller is not running")
     with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as client:
         client.settimeout(75 if action in ("start", "stop") else 35)
-        client.connect(str(endpoint))
+        while True:
+            try:
+                client.connect(str(endpoint))
+                break
+            except (ConnectionRefusedError, FileNotFoundError):
+                if action in ('start', 'preview-start', 'decode-start') and time.monotonic() < deadline:
+                    time.sleep(0.05)
+                    continue
+                if action == 'check':
+                    return {'ok': True, 'result': Controller().check()}
+                if action in ('status', 'stop', 'record-stop', 'preview-stop', 'decode-stop'):
+                    return {'ok': True, 'result': {'state': 'stopped', 'recording': False,
+                            'serviceRunning': False, 'serviceMessage': 'Controller service is not running'}}
+                raise ControlError('Controller service is not running')
         client.sendall((json.dumps({"action": action, "payload": payload}) + "\n").encode("utf-8"))
         with client.makefile("rb") as reader:
             return json.loads(reader.readline())

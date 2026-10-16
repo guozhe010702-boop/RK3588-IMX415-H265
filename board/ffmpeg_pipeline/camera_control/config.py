@@ -24,6 +24,8 @@ ACTIONS = (
     "record-stop",
     "preview-start",
     "preview-stop",
+    "decode-start",
+    "decode-stop",
     "snapshot",
     "logs",
 )

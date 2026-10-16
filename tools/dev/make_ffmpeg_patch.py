@@ -23,6 +23,11 @@ old=(source/'v4l2.c').read_text(encoding='utf-8'); new=old
 new=replace_once(new,'#include "v4l2-common.h"','#include "v4l2-common.h"\n#include "v4l2_nv12m_copy.h"')
 new=replace_once(new,'static const int desired_video_buffers = 256;','static const int desired_video_buffers = 8;')
 new=replace_once(new,'    int plane_count;','    int plane_count;\n    unsigned int plane_pitch[VIDEO_MAX_PLANES];')
+new=replace_once(new, '    unsigned int plane_pitch[VIDEO_MAX_PLANES];', '''    unsigned int plane_pitch[VIDEO_MAX_PLANES];
+    uint64_t capture_frames, capture_gaps, capture_errors;
+    uint32_t capture_sequence;
+    int capture_sequence_valid;
+    int64_t capture_report_at;''')
 a=new.index('static int device_init('); b=new.index('static int first_field(',a)
 new=new[:a]+'''static int device_init(AVFormatContext *ctx, int *width, int *height,
                        uint32_t pixelformat)
@@ -77,6 +82,7 @@ needle='''        if (V4L2_TYPE_IS_MULTIPLANAR(buf.type)) {
 new=replace_once(new,needle,'''        if (s->pixelformat == V4L2_PIX_FMT_NV12M) {
             V4L2Nv12mPlane input[2];
             if (buf.length != 2 || (buf.flags & V4L2_BUF_FLAG_ERROR)) {
+                s->capture_errors++;
                 enqueue_buffer(s, &buf);
                 return AVERROR(EAGAIN);
             }
@@ -90,9 +96,26 @@ new=replace_once(new,needle,'''        if (s->pixelformat == V4L2_PIX_FMT_NV12M)
             if (res >= 0)
                 res = v4l2_nv12m_copy(pkt->data, pkt->size, input, s->width, s->height);
             if (res < 0) {
+                s->capture_errors++;
                 av_packet_unref(pkt);
                 enqueue_buffer(s, &buf);
                 return res;
+            }
+            if (s->capture_sequence_valid) {
+                uint32_t distance = buf.sequence - s->capture_sequence;
+                /* Forward gaps only: ignore a driver sequence reset/backward jump. */
+                if (distance > 1 && distance < UINT32_MAX / 2)
+                    s->capture_gaps += distance - 1;
+            }
+            s->capture_sequence = buf.sequence;
+            s->capture_sequence_valid = 1;
+            s->capture_frames++;
+            if (av_gettime_relative() - s->capture_report_at >= 1000000) {
+                s->capture_report_at = av_gettime_relative();
+                av_log(ctx, AV_LOG_INFO, "AV_CAPTURE frames=%llu gaps=%llu width=%d height=%d errors=%llu mono_us=%lld\\n",
+                       (unsigned long long)s->capture_frames, (unsigned long long)s->capture_gaps,
+                       s->width, s->height, (unsigned long long)s->capture_errors,
+                       (long long)s->capture_report_at);
             }
         } else if (V4L2_TYPE_IS_MULTIPLANAR(buf.type)) {
             int totalbytes = 0;''')
@@ -116,5 +139,27 @@ diff('v4l2.c',old,new)
 header=(ROOT/'board/ffmpeg_pipeline/patches/v4l2_nv12m_copy.h').read_text(encoding='utf-8')
 parts.extend(difflib.unified_diff([],header.splitlines(True),fromfile='/dev/null',tofile='b/libavdevice/v4l2_nv12m_copy.h'))
 output=ROOT/'board/ffmpeg_pipeline/patches/0001-nv12m-capture.patch'
-output.write_text(''.join(parts),encoding='utf-8',newline='\n')
-print('Pinned NV12M patch generated')
+# Keep the original compatibility patch byte-for-byte so deployed builds can
+# apply telemetry incrementally without reversing their working NV12M support.
+base_patch = output.read_text(encoding='utf-8')
+def apply_text_patch(original, patch, filename):
+    lines=original.splitlines(True); result=[]; cursor=0; active=False
+    for line in patch.splitlines(True):
+        if line.startswith('--- '): active=False
+        elif line.startswith('+++ '): active=line.strip()=='+++ b/libavdevice/'+filename
+        elif active and line.startswith('@@ '):
+            import re
+            start=int(re.match(r'@@ -(\d+)',line)[1])-1
+            result.extend(lines[cursor:start]); cursor=start
+        elif active and line.startswith((' ', '-')):
+            assert lines[cursor]==line[1:], (cursor,line)
+            if line[0]==' ': result.append(line[1:])
+            cursor+=1
+        elif active and line.startswith('+'): result.append(line[1:])
+    result.extend(lines[cursor:]); return ''.join(result)
+base_source=apply_text_patch((source/'v4l2.c').read_text(encoding='utf-8'),base_patch,'v4l2.c')
+stats_patch=''.join(difflib.unified_diff(base_source.splitlines(True),new.splitlines(True),
+    fromfile='a/libavdevice/v4l2.c',tofile='b/libavdevice/v4l2.c'))
+output.write_text(base_patch,encoding='utf-8',newline='\n')
+(output.parent/'0002-capture-metrics.patch').write_text(stats_patch,encoding='utf-8',newline='\n')
+print('Pinned compatibility + incremental capture metrics patches generated')

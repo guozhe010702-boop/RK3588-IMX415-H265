@@ -2,6 +2,8 @@
 
 主程序是 **Windows 桌面控制台 + RK3588 FFmpeg/VPU 控制服务**。IMX415/con7 经 `/dev/video44` 采集，硬编后通过 RTSP 提供电脑预览、HDMI、录像和截图。
 
+当前开发版本 **1.2.0** 增加性能面板、按秒帧率/带宽、十分钟趋势、CSV 和板端硬解显示。[4K60 与性能监测指南](docs/guides/4K60与性能监测.md)区分已完成的合成编解码、真实 4K30 和待系统切换验证的相机 4K60。默认仍为 1080p30。
+
 ## 目录与入口
 
 ```text
@@ -9,6 +11,7 @@ av_dev/
 ├─ README.md                  从这里开始
 ├─ board/                     当前板端程序
 │  ├─ ffmpeg_pipeline/         avctl.py、控制模块、配置、构建和测试
+│  ├─ bsp/                     独立实验驱动候选，不随普通程序部署
 │  └─ diagnostics/            环境与编码器检查
 ├─ desktop/                   Windows 主程序：main.py、evm_console/、tests/
 ├─ examples/                  学习代码，与主程序分开
@@ -73,7 +76,7 @@ python .\tools\release\package_project.py
 
 ## 本次清理的边界
 
-已清除重复解压目录、旧重复包、临时验证目录和构建缓存，移除重复 README.txt、文档 HTML 及 HTML 生成器。当前源码和最新 1.1.0 EXE 包已归位；本轮没有重新部署板端或重新发布 EXE。
+此前已清除重复解压目录、旧重复包、临时验证目录和构建缓存，移除重复 README.txt、文档 HTML 及 HTML 生成器。性能功能在原目录上增量开发，实际部署与验收范围见 [1.2.0 记录](docs/history/4K60与性能监测验收.md)。
 
 整理前完整 Git 历史、源码及历史验证材料已归档到相邻目录 `../av_dev_archive_20261016/`。归档不在项目内部，避免再次混入日常开发目录；操作明细在归档的 `migration.json`。源码改动见 Git 历史。
 

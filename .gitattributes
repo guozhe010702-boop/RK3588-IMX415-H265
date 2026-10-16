@@ -2,6 +2,7 @@
 *.sh text eol=lf
 *.c text eol=lf
 *.h text eol=lf
+*.dts text eol=lf
 **/Makefile text eol=lf
 *.md text eol=lf
 *.html text eol=lf
@@ -10,5 +11,5 @@
 *.py text eol=lf
 *.json text eol=lf
 *.yml text eol=lf
-*.patch text eol=lf whitespace=-blank-at-eol
+*.patch text eol=lf whitespace=-blank-at-eol,-space-before-tab,-blank-at-eof
 *.ps1 text eol=crlf

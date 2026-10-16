@@ -1,0 +1,39 @@
+{
+  "status": "UNVALIDATED_CANDIDATE_NOT_FLASHED",
+  "originalBootSha256": "7cf5378f68e374aec8d2fe8b01e8ba4e8e36863a8b71f61ba670c5f6dc3bca7f",
+  "candidateBootSha256": "a69c73b9e7415f1bb80c923f65a53fc3abb009b664890778eda5f9704d8e2e72",
+  "bytes": 50827264,
+  "partitionBytes": 67108864,
+  "kernelSha256": "edf63ba908f885c6e7c9cd7046629b489a026678bfa6a8cb60ff8e4c283625ec",
+  "dtbSha256": "f88778be75911426df9700e23cbde2e2f2dc5ed9d1f8f5a83e4681a309d482c0",
+  "realCamera4k60Validated": false,
+  "unchangedPayloads": [
+    "ramdisk",
+    "resource"
+  ],
+  "sensorPath": "/i2c@feaa0000/imx415@36",
+  "systemSwitchApproved": false,
+  "recoveryBootTested": false,
+  "kernelObjectCompiled": true,
+  "kernelImageBuilt": true,
+  "bootFitPackaged": true,
+  "kernelConfigDifferences": 0,
+  "compiler": "GNU Toolchain 10.3-2021.07 aarch64-none-linux-gnu-gcc 10.3.1",
+  "kernelConfigSha256": "24981d94568c93a4ddbc9bbc8444625b13bb1673a6fb45402aca285b9fe43c40",
+  "imx415ObjectSha256": "0e31714d22cbb1774bb4f4d0431334143c9b5c528897119b1fd36ae23a500008",
+  "dtPropertiesChanged": [
+    {
+      "node": "/i2c@feaa0000/imx415@36",
+      "property": "dvsense,experimental-4k60"
+    },
+    {
+      "node": "/i2c@feaa0000/imx415@36",
+      "property": "rockchip,camera-hdr-mode"
+    }
+  ],
+  "bootPartition": "/dev/mmcblk0p3",
+  "bootPartitionLabel": "boot",
+  "originalBackupVerifiedOnPC": true,
+  "liveSensorClockHz": 37125000,
+  "bootTested": false
+}

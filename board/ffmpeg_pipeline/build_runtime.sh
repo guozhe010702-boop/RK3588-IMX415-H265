@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Native ARM64 build. Vendor runtimes and the live camera are untouched.
 set -Eeuo pipefail
+unset CPATH C_INCLUDE_PATH CPLUS_INCLUDE_PATH OBJC_INCLUDE_PATH
 root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 prefix="$root/runtime"
 build="$root/build"
@@ -57,14 +58,16 @@ ninja -C "$build/rga-build" -j4
 ninja -C "$build/rga-build" install
 echo 'PHASE: patched FFmpeg'
 cd "$build/ffmpeg"
-if git apply --check "$root/patches/0001-nv12m-capture.patch"; then
-  git apply "$root/patches/0001-nv12m-capture.patch"
-else
-  git apply --reverse --check "$root/patches/0001-nv12m-capture.patch"
-fi
+for patch in "$root"/patches/0*.patch; do
+  if git apply --check "$patch"; then
+    git apply "$patch"
+  else
+    git apply --reverse --check "$patch"
+  fi
+done
 export PKG_CONFIG_PATH="$prefix/lib/pkgconfig:$prefix/lib64/pkgconfig:${PKG_CONFIG_PATH:-}"
 export LD_LIBRARY_PATH="$prefix/lib:$prefix/lib64:${LD_LIBRARY_PATH:-}"
-./configure --prefix="$prefix" --disable-autodetect --disable-doc --disable-debug --disable-ffplay --enable-version3 --enable-libdrm --enable-rkmpp --enable-rkrga --extra-cflags="-I$prefix/include" --extra-ldflags="-L$prefix/lib -Wl,-rpath,$prefix/lib"
+./configure --prefix="$prefix" --disable-autodetect --disable-doc --disable-debug --disable-ffplay --enable-version3 --enable-libdrm --enable-rkmpp --enable-rkrga --extra-cflags="-I. -I$prefix/include" --extra-ldflags="-L$prefix/lib -Wl,-rpath,$prefix/lib"
 make -j4
 make install
 echo 'PHASE: MediaMTX'
@@ -84,7 +87,7 @@ python3 - "$root" <<'PY'
 import hashlib,json,pathlib,subprocess,sys,datetime
 root=pathlib.Path(sys.argv[1]); lock=json.loads((root/'versions.json').read_text())
 lock['builtAt']=datetime.datetime.now().astimezone().isoformat()
-lock['sha256']={str(p.relative_to(root)):hashlib.sha256(p.read_bytes()).hexdigest() for p in [root/'runtime/bin/ffmpeg',root/'runtime/bin/ffprobe',root/'runtime/bin/mediamtx',root/'patches/0001-nv12m-capture.patch']}
+lock['sha256']={str(p.relative_to(root)):hashlib.sha256(p.read_bytes()).hexdigest() for p in [root/'runtime/bin/ffmpeg',root/'runtime/bin/ffprobe',root/'runtime/bin/mediamtx']+sorted((root/'patches').glob('0*.patch'))}
 lock['configure']=(root/'build/ffmpeg/ffbuild/config.log').read_text(errors='replace').splitlines()[0:10]
 (root/'runtime/build-manifest.json').write_text(json.dumps(lock,indent=2)+'\n')
 PY

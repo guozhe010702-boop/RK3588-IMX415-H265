@@ -1,5 +1,7 @@
 # 当前板端 FFmpeg 链路
 
+性能版本增加 `metrics.py` 后台采样、`decoder.py` 的 VPU/RGA/HDMI 支路，以及增量取帧计数补丁。部署和指标见 [性能指南](../../docs/guides/4K60与性能监测.md)；BSP 候选单独放在 `board/bsp/`，普通部署不会改内核。
+
 对外命令入口保持 `avctl.py`；实现现在位于 `camera_control/`。桌面、操作指南和 systemd 继续调用这个入口，不直接导入内部模块。
 
 | 文件 | 责任 | 不负责的内容 |

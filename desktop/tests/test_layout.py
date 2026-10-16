@@ -37,7 +37,7 @@ def test_extracted_layout_keeps_snapshot_callback(tmp_path, monkeypatch):
         window.update_controls()
         window.action_buttons["snapshot"].click()
         assert jobs == [("snapshot",)] and window.operation_busy
-        assert window.pages.count() == 4
+        assert window.pages.count() == 5
     finally:
         close_window(app, window)
 

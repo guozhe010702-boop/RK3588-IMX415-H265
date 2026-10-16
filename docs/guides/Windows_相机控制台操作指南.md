@@ -1,17 +1,17 @@
 # Windows 相机控制台：安装、操作与源码修改
 
-版本 1.1.0。中文深色桌面软件已实现，主界面为实时视频，右侧为设备连接、编码设置、媒体文件、运行日志。硬编仍在 RK3588 上进行，电脑负责控制、解码与下载。
+版本 1.2.0。中文深色桌面软件，主界面为实时视频，右侧为设备连接、编码设置、媒体文件、运行日志和性能监测。新增指标与 CSV 见 [4K60 与性能监测](4K60与性能监测.md)。硬编在 RK3588，电脑负责控制、解码与下载。4K60 预设不代表当前传感器已支持。
 
 ## 1. 双击使用免安装版
 
-本地交付文件是`releases/EVM3588CameraConsole-Windows-x64-v1.1.0.zip`，其 `.zip.sha256` 文件保存校验值。解压整个压缩包，进入 `EVM3588CameraConsole` 文件夹，双击 `EVM3588CameraConsole.exe`。
+本地交付文件是`releases/EVM3588CameraConsole-Windows-x64-v1.2.0.zip`，其 `.zip.sha256` 文件保存校验值。解压整个压缩包，进入 `EVM3588CameraConsole` 文件夹，双击 `EVM3588CameraConsole.exe`。
 
 保留 EXE、`_internal/`、`ffmpeg/`、许可说明和版本记录之间的相对位置。无需安装 Python；不要只把 EXE 单独拖到其它目录。可把 EXE 的快捷方式放在桌面。
 
 若采用终端解压，**电脑 PowerShell，项目根目录**：
 
 ```powershell
-Expand-Archive -LiteralPath '.\releases\EVM3588CameraConsole-Windows-x64-v1.1.0.zip' -DestinationPath '.\桌面控制台'
+Expand-Archive -LiteralPath '.\releases\EVM3588CameraConsole-Windows-x64-v1.2.0.zip' -DestinationPath '.\桌面控制台'
 ```
 
 解释：`Expand-Archive` 解压 ZIP；`-LiteralPath` 按原样处理输入文件名；`-DestinationPath` 指定新目录。本示例目标目录应尚未使用，重复解压请换新目录。
@@ -56,7 +56,7 @@ passwd root
 
 ## 3. 看画面、HDMI 与状态卡片
 
-连接成功且直播运行后，中央显示实时画面。视频保持原始宽高比，黑边表示适配窗口；画面右上角可选择流畅（最大 640 宽、15 fps）、均衡（最大 960 宽、30 fps）或清晰（最大 1280 宽、30 fps）。默认清晰，不改变板端编码和录像的 1920×1080；源流低于档位帧率时不会强行补到高帧率。
+连接成功且直播运行后，中央显示实时画面。视频保持原始宽高比，黑边表示适配窗口；画面右上角可选择流畅（最大 640 宽、15 fps）、均衡（最大 960 宽、30 fps）、清晰（最大 1280 宽、30 fps）或性能（最大 1280 宽、60 fps）。默认清晰，不改变板端编码和录像的 1920×1080；源流低于档位帧率时不会强行补到高帧率。
 
 | 控件 | 实际作用 |
 | --- | --- |
@@ -79,7 +79,7 @@ passwd root
 - 默认 H.265、1920×1080、30 fps、2.5 Mbit/s、GOP 30。
 - 本板 ISP 尺寸步长为 8，宽高应为 8 的倍数，仍需满足固件与传感器实际支持。
 - 码率单位 Mbit/s；2.5 对应板端 2500000 bit/s。GOP 30 在 30 fps 下约每秒一个关键帧。
-- 当前传感器实际为 30 fps，界面限制编码帧率不超过实际采集帧率；降低编码帧率采用抽帧，不改变传感器曝光和读出模式。低帧率时可同步降低 GOP，减少加入直播等待关键帧的时间。
+- 当前传感器实际为 30 fps，界面允许填入 60 fps 预设，但板端在停旧流之前拒绝超过实际采集能力的请求；降低编码帧率采用抽帧，不改变传感器曝光和读出模式。低帧率时可同步降低 GOP。
 - “高级：采集节点”默认 `/dev/video44`，不确定节点时保持默认。
 - 右侧“运行值”来自板端查询；实际采集尺寸单独确认，不能把填入值当作驱动已经采用。
 - 录像时应用按钮被禁用，应先停止录像并等待封口。
@@ -151,7 +151,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\desktop\run.ps1
 .\.venv-desktop\Scripts\python.exe .\desktop\build.py
 ```
 
-解释：用 PyInstaller 生成免安装目录，复制电脑现有 FFmpeg，附版本与许可记录，再生成 ZIP 与 SHA256。电脑需能从 PATH 找到 `ffmpeg.exe`；需要指定位置时加 `--ffmpeg` 并传入完整路径。构建产物在 `releases/desktop/1.1.0/EVM3588CameraConsole/`，ZIP 在 `releases/`。
+解释：用 PyInstaller 生成免安装目录，复制电脑现有 FFmpeg，附版本与许可记录，再生成 ZIP 与 SHA256。电脑需能从 PATH 找到 `ffmpeg.exe`；需要指定位置时加 `--ffmpeg` 并传入完整路径。构建产物在 `releases/desktop/1.2.0/EVM3588CameraConsole/`，ZIP 在 `releases/`。
 
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\tools/deploy/deploy.ps1
@@ -179,4 +179,4 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\tools/deploy/deploy.ps
 
 1.1.0 的改动依据与后续优先级见 [优化调研与实施](../architecture/Windows_控制台优化调研与实施.md)，新测试数据见 [优化验收记录](../history/Windows_控制台优化验收记录.md)。
 
-源码阅读从 [项目程序逻辑与目录导航](../architecture/项目程序逻辑与目录导航.md) 开始。本轮结构重构未替换已验收的 1.1.0 EXE 或板端运行实例。
+源码阅读从 [项目程序逻辑与目录导航](../architecture/项目程序逻辑与目录导航.md) 开始。1.2.0 的新模块和实测结果见 [性能指南](4K60与性能监测.md) 与 [验收记录](../history/4K60与性能监测验收.md)。

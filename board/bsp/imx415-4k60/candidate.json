@@ -1,0 +1,40 @@
+{
+  "status": "UNVALIDATED_CANDIDATE",
+  "kernelBuilt": false,
+  "bootImageBuilt": false,
+  "boardTested": false,
+  "sdkArchive": "evm3588_linux_rkr3.3-v1.0.3_v1.2.1.23_sdk.tar.gz",
+  "sourceMember": "evm3588_linux_v1.0.3/kernel/drivers/media/i2c/imx415.c",
+  "sourceSha256": "e6efae0630044be861d74a2098ad5db7e72c009525244f3ac563152bf83401ce",
+  "sourceBytes": 69940,
+  "candidateSourceSha256": "24fd909f1f9628782de1ab1a7375b5a653e4edc4ea16d1754c88e110886c339f",
+  "referenceUrl": "https://raw.githubusercontent.com/bambooCZ/rk3588-imx415-4k60/a779a49f70a7cd3b3732366d02c76f4b48f5a9d4/imx415-60fps.patch",
+  "referenceSha256": "e085c1cfaa765f0c4b90666ff53c1dabbb8a4462fd786daa8cbfe9e4e32f75b9",
+  "patchSha256": "2bf5352729a48e91cdfd83cde4dd971d08d9ac500fc1311839bf6a50ff25f353",
+  "originalFps": [
+    30.0,
+    30.0,
+    20.0,
+    20.0,
+    30.0,
+    30.0,
+    20.0,
+    30.0,
+    30.0
+  ],
+  "candidate": {
+    "sensorSize": [
+      3864,
+      2192
+    ],
+    "fps": 60,
+    "bitDepth": 10,
+    "sensorLaneMbps": 1485,
+    "receiverReportedMbps": 1520,
+    "hmax": 528,
+    "vmax": 2344,
+    "htsReported": 4324,
+    "xvclkHz": 37125000,
+    "enableProperty": "dvsense,experimental-4k60"
+  }
+}

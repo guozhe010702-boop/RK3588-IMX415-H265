@@ -1,0 +1,9 @@
+// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
+// Experimental EVM3588 B1 / con7 (i2c2@feaa0000, sensor@36) candidate.
+// Preserve the vendor B1 topology. This DTB is NOT validated against the live board.
+#include "evm3588-b1.dts"
+
+&imx415_1 {
+    dvsense,experimental-4k60;
+    rockchip,camera-hdr-mode = <0>;
+};

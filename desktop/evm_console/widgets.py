@@ -68,10 +68,17 @@ class VideoCanvas(QWidget):
     def __init__(self):
         super().__init__()
         self.image = None
+        self.submitted_frames = 0
+        self.painted_frames = 0
+        self.painted_sequence = 0
+        self.discarded_frames = 0
         self.message = "连接开发板，打开实时画面"
         self.setMinimumSize(400, 180)
 
     def set_frame(self, data, width, height):
+        if self.submitted_frames != self.painted_sequence:
+            self.discarded_frames += 1
+        self.submitted_frames += 1
         self.image = QImage(data, width, height, width * 3, QImage.Format.Format_BGR888).copy()
         self.message = ""
         self.update()
@@ -95,6 +102,9 @@ class VideoCanvas(QWidget):
                 size.height(),
             )
             painter.drawImage(target, self.image)
+            if self.painted_sequence != self.submitted_frames:
+                self.painted_sequence = self.submitted_frames
+                self.painted_frames += 1
             if self.message:
                 painter.fillRect(
                     QRectF(0, self.height() - 42, self.width(), 42), QColor(5, 12, 24, 220)

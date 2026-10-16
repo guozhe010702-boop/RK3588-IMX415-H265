@@ -1,13 +1,14 @@
 """Build one source ZIP, without making another editable source directory."""
 from pathlib import Path
 from zipfile import ZipFile, ZIP_DEFLATED
+import hashlib
 
 ROOT = Path(__file__).resolve().parents[2]
 OUTPUT = ROOT / 'releases/av_dev-source.zip'
 OUTPUT.parent.mkdir(exist_ok=True)
 EXCLUDED = {'__pycache__', '.pytest_cache', 'runtime', 'build', 'dist', 'vendor',
             'state', 'logs', 'recordings', 'snapshots'}
-EXTENSIONS = {'.sh','.c','.h','.md','.py','.json','.yml','.patch','.txt','.ps1','.svg','.html','.js'}
+EXTENSIONS = {'.sh','.c','.h','.dts','.md','.py','.json','.yml','.patch','.txt','.ps1','.svg','.html','.js'}
 files = [ROOT/name for name in ('README.md','.gitignore','.gitattributes')]
 for folder in ('board','desktop','docs','examples','tools','web'):
     for file in (ROOT/folder).rglob('*'):
@@ -28,4 +29,5 @@ with ZipFile(temporary) as archive:
     for file in set(files):
         assert archive.read(file.relative_to(ROOT).as_posix())==file.read_bytes()
 temporary.replace(OUTPUT)
+OUTPUT.with_suffix('.zip.sha256').write_text(hashlib.sha256(OUTPUT.read_bytes()).hexdigest()+'  '+OUTPUT.name+'\n')
 print(f'Verified source ZIP: {len(set(files))+1} files; {OUTPUT}')

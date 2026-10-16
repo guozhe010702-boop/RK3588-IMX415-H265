@@ -15,7 +15,9 @@ import threading
 import time
 import urllib.request
 from .config import ROOT, DEFAULTS, URL, MIN_FREE, ControlError, validate_config
-from .support import atomic_json, camera_owners, run_id, sensor_frame_rate, stamp, tail
+from .support import atomic_json, camera_owners, camera_capabilities, run_id, sensor_frame_rate, stamp, tail
+from .metrics import BoardMetrics
+from .decoder import HardwareDisplay
 
 
 class Controller:
@@ -37,6 +39,7 @@ class Controller:
         self.capture_stopped_at = 0.0
         self.record_temp = None
         self.progress = {}
+        self.progress_at = None
         self.last_frame_at = 0.0
         self.last_error = None
         self.want_capture = False
@@ -56,6 +59,9 @@ class Controller:
             if (self.root / "config.json").exists()
             else {}
         )
+        self.decoder = HardwareDisplay(self)
+        self.telemetry = BoardMetrics(self)
+        self.actual_capture = None
 
     def active(self, process):
         return process is not None and process.poll() is None
@@ -80,6 +86,8 @@ class Controller:
             "encoders": encoders,
             "vpuDevicePresent": Path("/dev/mpp_service").exists(),
             "sensorFramesPerSecond": sensor_frame_rate(self.config["device"]),
+            "cameraCapabilities": camera_capabilities(self.config["device"]),
+            "decodeBackend": "rkmpp+rga+ffplay",
             "cameraPresent": Path(self.config["device"]).exists(),
             "config": self.config,
             "runtimeBuilt": Path(self.root / "runtime/build-manifest.json").exists(),
@@ -87,6 +95,9 @@ class Controller:
         }
 
     def media_path(self):
+        if self.telemetry.thread is not None:
+            with self.telemetry.lock:
+                return dict(self.telemetry.media)
         try:
             with urllib.request.urlopen(
                 "http://127.0.0.1:9997/v3/paths/get/imx415", timeout=0.7
@@ -113,7 +124,7 @@ class Controller:
                     except OSError:
                         pass
             frame = int(self.progress.get("frame", "0") or 0)
-            actual = None
+            actual = self.actual_capture if capture_alive else None
             if capture_alive and frame:
                 for line in tail(self.capture_log, 80):
                     found = re.search(
@@ -126,9 +137,11 @@ class Controller:
                             "height": int(found[3]),
                             "reportedFps": float(found[4]),
                         }
+                        self.actual_capture = actual
                         break
             return {
                 "sampledAt": stamp(),
+                "serviceRunning": True,
                 "state": (
                     "running"
                     if capture_alive and recent and media.get("ready")
@@ -156,7 +169,9 @@ class Controller:
                 "rtspPath": "/imx415",
                 "rtspPort": 8554,
                 "readers": len(media.get("readers", [])),
-                "previewRunning": self.active(self.preview),
+                "previewRunning": self.decoder.snapshot()["running"],
+                "boardDecode": self.decoder.snapshot(),
+                "metrics": self.telemetry.snapshot(),
                 "recording": self.active(self.recorder),
                 "recordingStartedAt": self.record_started,
                 "recordingFile": str(self.record_temp) if self.record_temp else None,
@@ -175,6 +190,12 @@ class Controller:
                 if key == "progress":
                     with self.lock:
                         if process is self.capture:
+                            now = time.monotonic()
+                            if self.progress_at is not None and now > self.progress_at:
+                                increment = int(block.get('frame', 0) or 0) - int(self.progress.get('frame', 0) or 0)
+                                if increment >= 0:
+                                    block['intervalFps'] = increment / (now - self.progress_at)
+                            self.progress_at = now
                             if int(block.get("frame", "0") or 0) > int(
                                 self.progress.get("frame", "0") or 0
                             ):
@@ -205,7 +226,10 @@ class Controller:
         if owners:
             raise ControlError("Camera busy; owner PID(s): " + " ".join(owners))
         c = self.config
-        source_fps = sensor_frame_rate(device) or c["fps"]
+        source_fps = sensor_frame_rate(device)
+        if source_fps is None and c['fps'] > 30:
+            raise ControlError('Cannot verify sensor frame rate; high fps request rejected')
+        source_fps = source_fps or c["fps"]
         if c["fps"] > source_fps + 0.01:
             raise ControlError(
                 "Requested fps exceeds actual sensor frame interval: " + str(source_fps)
@@ -266,6 +290,8 @@ class Controller:
             URL,
         ]
         self.progress = {}
+        self.actual_capture = None
+        self.progress_at = None
         self.last_frame_at = 0.0
         self.capture = self.spawn_logged(args, self.capture_log, progress=True)
         self.capture_started = stamp()
@@ -290,6 +316,8 @@ class Controller:
             if self.active(self.capture) and requested == self.config:
                 return self.status()
             sensor_fps = sensor_frame_rate(requested["device"])
+            if sensor_fps is None and requested['fps'] > 30:
+                raise ControlError('Cannot verify sensor frame rate; high fps request rejected')
             if sensor_fps and requested["fps"] > sensor_fps + 0.01:
                 raise ControlError(
                     "Requested fps exceeds actual sensor frame interval: " + str(sensor_fps)
@@ -301,7 +329,7 @@ class Controller:
             self.want_capture = False
             self.stop_child(self.capture)
             self.capture_stopped_at = time.monotonic()
-            self.stop_child(self.preview, 3)
+            self.decoder.stop()
             self.preview = None
             self.capture = None
             self.retry_times = []
@@ -468,49 +496,19 @@ class Controller:
 
     def preview_start(self):
         with self.lock:
-            if self.active(self.preview):
+            if self.decoder.snapshot()['running']:
                 return self.status()
             if self.status()["state"] != "running":
                 raise ControlError("Stream is not ready")
-            display = ":0"
-            auth = next(iter(sorted(Path("/run/user").glob("*/gdm/Xauthority"))), None)
-            env = dict(os.environ, DISPLAY=display)
-            if auth:
-                env["XAUTHORITY"] = str(auth)
-            with open(self.root / "logs/preview.log", "ab", buffering=0) as log:
-                self.preview = subprocess.Popen(
-                    [
-                        "/usr/bin/ffplay",
-                        "-hide_banner",
-                        "-loglevel",
-                        "warning",
-                        "-rtsp_transport",
-                        "tcp",
-                        "-fflags",
-                        "nobuffer",
-                        "-flags",
-                        "low_delay",
-                        "-framedrop",
-                        URL,
-                    ],
-                    env=env,
-                    stdin=subprocess.DEVNULL,
-                    stdout=subprocess.DEVNULL,
-                    stderr=log,
-                    start_new_session=True,
-                )
-        time.sleep(0.5)
-        if not self.active(self.preview):
-            raise ControlError(
-                "HDMI preview failed: " + str(tail(self.root / "logs/preview.log", 10))
-            )
+            self.decoder.start()
+            self.preview = self.decoder.player
         self.want_preview = True
         return self.status()
 
     def preview_stop(self):
         with self.lock:
             self.want_preview = False
-            self.stop_child(self.preview, 5)
+            self.decoder.stop()
             self.preview = None
             return {"previewRunning": False}
 
@@ -585,7 +583,7 @@ class Controller:
                             }
                             self.capture = None
                             self.retry_at = time.monotonic() + 1
-                            self.stop_child(self.preview, 3)
+                            self.decoder.stop()
                             self.preview = None
                         now = time.monotonic()
                         if now >= self.retry_at:
@@ -602,10 +600,15 @@ class Controller:
                                 self.retry_at = now + 2
                     if (
                         self.want_preview
-                        and not self.active(self.preview)
+                        and not self.decoder.snapshot()['running']
                         and self.status()["state"] == "running"
                     ):
-                        self.preview_start()
+                        try:
+                            self.preview_start()
+                        except Exception as error:
+                            # HDMI failure must never restart or disable the encoder.
+                            self.want_preview = False
+                            self.decoder.error = str(error)
                     atomic_json(self.root / "state/status.json", self.status())
                 except Exception as error:
                     self.last_error = {"at": stamp(), "message": str(error)}
@@ -621,6 +624,8 @@ class Controller:
             "record-stop": self.record_stop,
             "preview-start": self.preview_start,
             "preview-stop": self.preview_stop,
+            "decode-start": self.preview_start,
+            "decode-stop": self.preview_stop,
             "snapshot": self.snapshot,
         }
         if action == "logs":

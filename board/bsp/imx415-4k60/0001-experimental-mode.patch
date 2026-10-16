@@ -1,0 +1,138 @@
+--- a/drivers/media/i2c/imx415.c
++++ b/drivers/media/i2c/imx415.c
+@@ -226,6 +226,7 @@
+ 	const struct imx415_mode *cur_mode;
+ 	u32			module_index;
+ 	u32			cfg_num;
++	bool experimental_4k60;
+ 	const char		*module_facing;
+ 	const char		*module_name;
+ 	const char		*len_name;
+@@ -757,6 +758,45 @@
+  *	.get_selection
+  * }
+  */
++/* EXPERIMENTAL: ported from bambooCZ/rk3588-imx415-4k60 @
++ * a779a49f70a7cd3b3732366d02c76f4b48f5a9d4. GPL-2.0, Miloslav Mrvik.
++ * 1485 Mbps sensor / 1520 Mbps receiver calibration workaround.
++ * NOT validated on EVM3588-B 5.10; requires explicit DT opt-in. */
++static __maybe_unused const struct regval imx415_linear_10bit_3864x2192_1485M_regs[] = {
++	{0x3020, 0x00},
++	{0x3021, 0x00},
++	{0x3022, 0x00},
++	{0x3024, 0x28},
++	{0x3025, 0x09},
++	{0x3028, 0x10},
++	{0x3029, 0x02},
++	{0x302C, 0x00},
++	{0x302D, 0x00},
++	{0x3033, 0x08},
++	{0x3050, 0x08},
++	{0x3051, 0x00},
++	{0x3054, 0x19},
++	{0x3058, 0x3E},
++	{0x3060, 0x25},
++	{0x3064, 0x4a},
++	{0x30CF, 0x00},
++	{0x3118, 0xA0},
++	{0x3260, 0x01},
++	{0x400C, 0x01},
++	{0x4018, 0xA7},
++	{0x401A, 0x57},
++	{0x401C, 0x5F},
++	{0x401E, 0x97},
++	{0x401F, 0x01},
++	{0x4020, 0x5F},
++	{0x4022, 0xAF},
++	{0x4024, 0x5F},
++	{0x4026, 0x9F},
++	{0x4028, 0x4F},
++	{0x4074, 0x00},
++	{REG_NULL, 0x00},
++};
++
+ static const struct imx415_mode supported_modes[] = {
+ 	/*
+ 	 * frame rate = 1 / (Vtt * 1H) = 1 / (VMAX * 1H)
+@@ -967,6 +1007,22 @@
+ 		.vc[PAD2] = V4L2_MBUS_CSI2_CHANNEL_1,
+ 		.vc[PAD3] = V4L2_MBUS_CSI2_CHANNEL_1,//M->csi wr2
+ 	},
++	/* Candidate only: 37.125 MHz XVCLK, four lanes, linear RAW10. */
++	{
++		.bus_fmt = MEDIA_BUS_FMT_SGBRG10_1X10,
++		.width = 3864,
++		.height = 2192,
++		.max_fps = { .numerator = 10000, .denominator = 600000 },
++		.exp_def = 0x0928 - 0x08,
++		.hts_def = 4324,
++		.vts_def = 0x0928,
++		.global_reg_list = imx415_global_10bit_3864x2192_regs,
++		.reg_list = imx415_linear_10bit_3864x2192_1485M_regs,
++		.hdr_mode = NO_HDR,
++		.mipi_freq_idx = 4,
++		.bpp = 10,
++		.vc[PAD0] = V4L2_MBUS_CSI2_CHANNEL_0,
++	},
+ };
+ 
+ static const s64 link_freq_items[] = {
+@@ -974,6 +1030,7 @@
+ 	MIPI_FREQ_446M,
+ 	MIPI_FREQ_743M,
+ 	MIPI_FREQ_891M,
++	760000000, /* experimental receiver calibration rate, NOT sensor lane rate */
+ };
+ 
+ /* Write registers up to 4 at a time */
+@@ -1068,6 +1125,9 @@
+ 	int cur_best_fit = 0;
+ 	int cur_best_fit_dist = -1;
+ 	unsigned int i;
++
++	if (imx415->experimental_4k60)
++		return &supported_modes[ARRAY_SIZE(supported_modes) - 1];
+ 
+ 	for (i = 0; i < imx415->cfg_num; i++) {
+ 		dist = imx415_get_reso_dist(&supported_modes[i], framefmt);
+@@ -1128,7 +1188,8 @@
+ 					 h_blank, 1, h_blank);
+ 		vblank_def = mode->vts_def - mode->height;
+ 		/* VMAX >= (PIX_VWIDTH / 2) + 46 = height + 46 */
+-		vblank_min = (mode->height + 46) - mode->height;
++		vblank_min = imx415->experimental_4k60 ? vblank_def : 46;
++		/* Preserve >=1 ms blanking for the experimental online ISP path. */
+ 		__v4l2_ctrl_modify_range(imx415->vblank, vblank_min,
+ 					 IMX415_VTS_MAX - mode->height,
+ 					 1, vblank_def);
+@@ -1707,6 +1768,9 @@
+ 		break;
+ 	case RKMODULE_SET_HDR_CFG:
+ 		hdr = (struct rkmodule_hdr_cfg *)arg;
++		/* Keep AIQ NO_HDR negotiation on the candidate; reject HDR switches. */
++		if (imx415->experimental_4k60)
++			return hdr->hdr_mode == NO_HDR ? 0 : -EINVAL;
+ 		w = imx415->cur_mode->width;
+ 		h = imx415->cur_mode->height;
+ 		for (i = 0; i < imx415->cfg_num; i++) {
+@@ -2545,13 +2609,19 @@
+ 		dev_warn(dev, " Get hdr mode failed! no hdr default\n");
+ 	}
+ 	imx415->client = client;
+-	imx415->cfg_num = ARRAY_SIZE(supported_modes);
++	imx415->experimental_4k60 = of_property_read_bool(node, "dvsense,experimental-4k60");
++	if (imx415->experimental_4k60 && hdr_mode != NO_HDR)
++		return -EINVAL;
++	imx415->cfg_num = ARRAY_SIZE(supported_modes) - !imx415->experimental_4k60;
+ 	for (i = 0; i < imx415->cfg_num; i++) {
+ 		if (hdr_mode == supported_modes[i].hdr_mode) {
+ 			imx415->cur_mode = &supported_modes[i];
+ 			break;
+ 		}
+ 	}
++
++	if (imx415->experimental_4k60)
++		imx415->cur_mode = &supported_modes[ARRAY_SIZE(supported_modes) - 1];
+ 
+ 	imx415->is_thunderboot = IS_ENABLED(CONFIG_VIDEO_ROCKCHIP_THUNDER_BOOT_ISP);
+ 

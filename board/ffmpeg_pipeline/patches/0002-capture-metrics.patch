@@ -1,0 +1,48 @@
+--- a/libavdevice/v4l2.c
++++ b/libavdevice/v4l2.c
+@@ -99,6 +99,10 @@
+     atomic_int buffers_queued;
+     int plane_count;
+     unsigned int plane_pitch[VIDEO_MAX_PLANES];
++    uint64_t capture_frames, capture_gaps, capture_errors;
++    uint32_t capture_sequence;
++    int capture_sequence_valid;
++    int64_t capture_report_at;
+     void ***buf_start;
+     unsigned int **buf_len;
+     char *standard;
+@@ -614,6 +618,7 @@
+         if (s->pixelformat == V4L2_PIX_FMT_NV12M) {
+             V4L2Nv12mPlane input[2];
+             if (buf.length != 2 || (buf.flags & V4L2_BUF_FLAG_ERROR)) {
++                s->capture_errors++;
+                 enqueue_buffer(s, &buf);
+                 return AVERROR(EAGAIN);
+             }
+@@ -627,9 +632,26 @@
+             if (res >= 0)
+                 res = v4l2_nv12m_copy(pkt->data, pkt->size, input, s->width, s->height);
+             if (res < 0) {
++                s->capture_errors++;
+                 av_packet_unref(pkt);
+                 enqueue_buffer(s, &buf);
+                 return res;
++            }
++            if (s->capture_sequence_valid) {
++                uint32_t distance = buf.sequence - s->capture_sequence;
++                /* Forward gaps only: ignore a driver sequence reset/backward jump. */
++                if (distance > 1 && distance < UINT32_MAX / 2)
++                    s->capture_gaps += distance - 1;
++            }
++            s->capture_sequence = buf.sequence;
++            s->capture_sequence_valid = 1;
++            s->capture_frames++;
++            if (av_gettime_relative() - s->capture_report_at >= 1000000) {
++                s->capture_report_at = av_gettime_relative();
++                av_log(ctx, AV_LOG_INFO, "AV_CAPTURE frames=%llu gaps=%llu width=%d height=%d errors=%llu mono_us=%lld\n",
++                       (unsigned long long)s->capture_frames, (unsigned long long)s->capture_gaps,
++                       s->width, s->height, (unsigned long long)s->capture_errors,
++                       (long long)s->capture_report_at);
+             }
+         } else if (V4L2_TYPE_IS_MULTIPLANAR(buf.type)) {
+             int totalbytes = 0;

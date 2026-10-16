@@ -29,6 +29,7 @@ from PySide6.QtWidgets import (
 )
 from .core import PREVIEW_PRESETS, load_preview_quality, data_root
 from .widgets import Badge, Metric, VideoCanvas
+from .performance import build_performance
 
 
 def button(text, callback, name=""):
@@ -102,7 +103,7 @@ def build_ui(window, auto):
     for key, title in [
         ("fps", "编码帧率"),
         ("size", "采集尺寸"),
-        ("bitrate", "目标码率"),
+        ("bitrate", "实测 RTSP Mbit/s"),
         ("disk", "板端剩余空间"),
     ]:
         window.metrics[key] = Metric(title)
@@ -133,6 +134,7 @@ def build_ui(window, auto):
     bottom.addWidget(window.hdmi_button)
     left.addLayout(bottom)
     panel = QFrame()
+    window.side_panel = panel
     panel.setObjectName("panel")
     panel.setFixedWidth(350)
     right = QVBoxLayout(panel)
@@ -140,7 +142,7 @@ def build_ui(window, auto):
     tabs = QGridLayout()
     window.pages = QStackedWidget()
     window.tab_buttons = []
-    for i, name in enumerate(("设备连接", "编码设置", "媒体文件", "运行日志")):
+    for i, name in enumerate(("设备连接", "编码设置", "媒体文件", "运行日志", "性能监测")):
         item = button(name, lambda checked=False, index=i: window.select_page(index), "tab")
         item.setCheckable(True)
         tabs.addWidget(item, i // 2, i % 2)
@@ -152,6 +154,7 @@ def build_ui(window, auto):
     build_encoding(window)
     build_media(window, auto)
     build_logs(window)
+    build_performance(window, page(window, '编解码性能'))
     window.select_page(0)
     window.footer = QLabel("  单相机 · RTSP TCP · 关闭软件后板端任务继续运行")
     window.footer.setObjectName("muted")
@@ -221,6 +224,11 @@ def build_connection(window):
 
 def build_encoding(window):
     layout = page(window, "编码与采集参数")
+    window.performance_preset = button('填入 4K60 性能预设', window.fill_performance_preset)
+    layout.addWidget(window.performance_preset)
+    window.capability_note = QLabel('4K60：等待实际传感器能力检查；预设不代表已支持')
+    window.capability_note.setWordWrap(True)
+    layout.addWidget(window.capability_note)
     form = QFormLayout()
     form.setSpacing(9)
     window.codec = QComboBox()
