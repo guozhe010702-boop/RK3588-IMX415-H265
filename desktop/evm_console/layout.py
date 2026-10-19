@@ -26,6 +26,8 @@ from PySide6.QtWidgets import (
     QHeaderView,
     QProgressBar,
     QScrollArea,
+    QSplitter,
+    QSizePolicy,
 )
 from .core import PREVIEW_PRESETS, load_preview_quality, data_root
 from .widgets import Badge, Metric, VideoCanvas
@@ -41,51 +43,77 @@ def button(text, callback, name=""):
 
 def build_ui(window, auto):
     root = QWidget()
-    window.setCentralWidget(root)
+    root.setObjectName("consoleRoot")
+    root.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+    # A short/high-DPI display must be able to reach every control. Scrolling is
+    # preferable to forcing a window larger than the screen's logical work area.
+    viewport = QScrollArea()
+    viewport.setWidgetResizable(True)
+    viewport.setWidget(root)
+    window.setCentralWidget(viewport)
+    window.root_scroll = viewport
+    root.setMinimumSize(740, 630)
     outer = QVBoxLayout(root)
     outer.setContentsMargins(0, 0, 0, 0)
     outer.setSpacing(0)
     header = QWidget()
     header.setObjectName("header")
     head = QHBoxLayout(header)
-    head.setContentsMargins(24, 18, 24, 18)
+    head.setContentsMargins(16, 12, 16, 12)
     brand = QVBoxLayout()
     title = QLabel("EVM3588  /  相机控制台")
     title.setObjectName("title")
+    title.setWordWrap(True)
     brand.addWidget(title)
     subtitle = QLabel("IMX415 · RK3588 VPU · 实时预览与录像")
     subtitle.setObjectName("subtitle")
+    subtitle.setWordWrap(True)
     brand.addWidget(subtitle)
-    head.addLayout(brand)
-    head.addStretch()
+    title.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
+    head.addLayout(brand, 1)
     window.badges = {name: Badge(name) for name in ("SSH", "视频", "VPU", "HDMI", "录像")}
-    for badge in window.badges.values():
-        head.addWidget(badge)
+    badge_grid = QGridLayout()
+    for i, badge in enumerate(window.badges.values()):
+        badge_grid.addWidget(badge, i // 3, i % 3)
+    head.addLayout(badge_grid)
     outer.addWidget(header)
     body = QHBoxLayout()
-    body.setContentsMargins(22, 20, 22, 16)
-    body.setSpacing(20)
+    body.setContentsMargins(12, 12, 12, 8)
+    body.setSpacing(10)
     outer.addLayout(body, 1)
-    left = QVBoxLayout()
-    body.addLayout(left, 1)
+    splitter = QSplitter(Qt.Orientation.Horizontal)
+    splitter.setChildrenCollapsible(False)
+    splitter.setHandleWidth(8)
+    body.addWidget(splitter)
+    window.content_splitter = splitter
+    video_panel = QWidget()
+    window.video_panel = video_panel
+    video_panel.installEventFilter(window)
+    video_panel.setMinimumWidth(360)
+    splitter.addWidget(video_panel)
+    left = QVBoxLayout(video_panel)
+    left.setContentsMargins(0, 0, 0, 0)
     caption = QHBoxLayout()
     label = QLabel("实时画面")
     label.setObjectName("section")
     caption.addWidget(label)
     window.stream_text = QLabel("等待连接")
     window.stream_text.setObjectName("muted")
-    caption.addWidget(window.stream_text)
-    caption.addStretch()
+    window.stream_text.setWordWrap(True)
+    window.stream_text.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
+    caption.addWidget(window.stream_text, 1)
+    left.addLayout(caption)
+    preview_controls = QHBoxLayout()
     window.preview_quality = QComboBox()
     window.preview_quality.addItems(list(PREVIEW_PRESETS))
     window.preview_quality.setCurrentText(load_preview_quality())
     window.preview_quality.setToolTip("仅改变电脑预览尺寸与帧率；板端编码、HDMI 和录像参数不变")
     window.preview_quality.currentTextChanged.connect(window.change_preview_quality)
-    caption.addWidget(window.preview_quality)
+    preview_controls.addWidget(window.preview_quality, 1)
     window.video.set_quality(*PREVIEW_PRESETS[window.preview_quality.currentText()])
-    caption.addWidget(button("重新播放", window.reconnect_video))
-    caption.addWidget(button("全屏", window.enter_fullscreen))
-    left.addLayout(caption)
+    preview_controls.addWidget(button("重新播放", window.reconnect_video))
+    preview_controls.addWidget(button("全屏", window.enter_fullscreen))
+    left.addLayout(preview_controls)
     window.video_holder = QVBoxLayout()
     window.video_holder.setContentsMargins(0, 0, 0, 0)
     video_frame = QFrame()
@@ -98,7 +126,8 @@ def build_ui(window, auto):
     window.message.setWordWrap(True)
     window.message.setObjectName("muted")
     left.addWidget(window.message)
-    metrics = QHBoxLayout()
+    metrics = QGridLayout()
+    window.metrics_grid = metrics
     window.metrics = {}
     for key, title in [
         ("fps", "编码帧率"),
@@ -107,12 +136,16 @@ def build_ui(window, auto):
         ("disk", "板端剩余空间"),
     ]:
         window.metrics[key] = Metric(title)
-        metrics.addWidget(window.metrics[key])
+        i = len(window.metrics) - 1
+        metrics.addWidget(window.metrics[key], i // 2, i % 2)
     left.addLayout(metrics)
     window.preview_stats = QLabel("电脑预览：等待画面")
     window.preview_stats.setObjectName("muted")
+    window.preview_stats.setWordWrap(True)
+    window.preview_stats.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
     left.addWidget(window.preview_stats)
-    toolbar = QHBoxLayout()
+    toolbar = QGridLayout()
+    window.toolbar_grid = toolbar
     window.action_buttons = {}
     for action, text, name in [
         ("start", "▶ 启动直播", "primary"),
@@ -123,22 +156,24 @@ def build_ui(window, auto):
     ]:
         item = button(text, lambda checked=False, a=action: window.action(a), name)
         window.action_buttons[action] = item
-        toolbar.addWidget(item)
+        i = len(window.action_buttons) - 1
+        toolbar.addWidget(item, i // 3, i % 3)
     left.addLayout(toolbar)
     bottom = QHBoxLayout()
     window.record_clock = QLabel("未录像")
     window.record_clock.setObjectName("muted")
-    bottom.addWidget(window.record_clock)
-    bottom.addStretch()
+    window.record_clock.setWordWrap(True)
+    window.record_clock.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
+    bottom.addWidget(window.record_clock, 1)
     window.hdmi_button = button("HDMI 开启", window.toggle_hdmi)
     bottom.addWidget(window.hdmi_button)
     left.addLayout(bottom)
     panel = QFrame()
     window.side_panel = panel
     panel.setObjectName("panel")
-    panel.setFixedWidth(350)
+    panel.setMinimumWidth(330)
     right = QVBoxLayout(panel)
-    right.setContentsMargins(14, 16, 14, 16)
+    right.setContentsMargins(10, 12, 10, 12)
     tabs = QGridLayout()
     window.pages = QStackedWidget()
     window.tab_buttons = []
@@ -149,7 +184,10 @@ def build_ui(window, auto):
         window.tab_buttons.append(item)
     right.addLayout(tabs)
     right.addWidget(window.pages, 1)
-    body.addWidget(panel)
+    splitter.addWidget(panel)
+    splitter.setStretchFactor(0, 3)
+    splitter.setStretchFactor(1, 2)
+    splitter.setSizes([820, 440])
     build_connection(window)
     build_encoding(window)
     build_media(window, auto)
@@ -158,8 +196,31 @@ def build_ui(window, auto):
     window.select_page(0)
     window.footer = QLabel("  单相机 · RTSP TCP · 关闭软件后板端任务继续运行")
     window.footer.setObjectName("muted")
+    window.footer.setWordWrap(True)
     window.footer.setContentsMargins(22, 6, 22, 14)
     outer.addWidget(window.footer)
+    apply_density(window, video_panel.size().width())
+
+
+def apply_density(window, width):
+    """Reflow controls by actual pane width, including manual splitter changes."""
+    columns = (4 if width >= 620 else 2, 5 if width >= 700 else 3)
+    if getattr(window, "_grid_columns", None) == columns:
+        return
+    window._grid_columns = columns
+    for layout, widgets, count in (
+        (window.metrics_grid, list(window.metrics.values()), columns[0]),
+        (window.toolbar_grid, list(window.action_buttons.values()), columns[1]),
+    ):
+        while layout.count():
+            layout.takeAt(0)
+        # Clear stretch left behind when changing from a wide to a narrow grid.
+        for i in range(5):
+            layout.setColumnStretch(i, 0)
+        for i, widget in enumerate(widgets):
+            layout.addWidget(widget, i // count, i % count)
+        for i in range(count):
+            layout.setColumnStretch(i, 1)
 
 
 def page(window, title):
@@ -182,6 +243,8 @@ def page(window, title):
 def build_connection(window):
     layout = page(window, "连接你的开发板")
     form = QFormLayout()
+    form.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow)
+    form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapLongRows)
     form.setSpacing(10)
     window.host = QLineEdit(window.connection.host)
     window.port = QSpinBox()
@@ -195,7 +258,10 @@ def build_connection(window):
     window.secret.setEchoMode(QLineEdit.EchoMode.Password)
     window.secret.setPlaceholderText("SSH 密码 / 私钥口令")
     window.key_file = QLineEdit(window.connection.key_file)
+    key_widget = QWidget()
     key_row = QHBoxLayout()
+    key_row.setContentsMargins(0, 0, 0, 0)
+    key_widget.setLayout(key_row)
     key_row.addWidget(window.key_file)
     key_row.addWidget(button("选择", window.choose_key))
     for name, widget in [
@@ -206,7 +272,12 @@ def build_connection(window):
         ("密码 / 口令", window.secret),
     ]:
         form.addRow(name, widget)
-    form.addRow("私钥文件", key_row)
+    form.addRow("私钥文件", key_widget)
+    def authentication_fields(index):
+        form.setRowVisible(key_widget, index == 1)
+        window.secret.setPlaceholderText("SSH 密码" if index == 0 else "私钥口令（可留空）")
+    window.auth.currentIndexChanged.connect(authentication_fields)
+    authentication_fields(window.auth.currentIndex())
     layout.addLayout(form)
     window.remember = QCheckBox("记住密码（Windows 凭据管理器）")
     window.remember.setChecked(window.connection.remember)
@@ -230,6 +301,8 @@ def build_encoding(window):
     window.capability_note.setWordWrap(True)
     layout.addWidget(window.capability_note)
     form = QFormLayout()
+    form.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow)
+    form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapLongRows)
     form.setSpacing(9)
     window.codec = QComboBox()
     window.codec.addItems(["H.265 / HEVC", "H.264 / AVC"])
@@ -341,7 +414,7 @@ def build_logs(window):
     window.log_view = QPlainTextEdit()
     window.log_view.setReadOnly(True)
     window.log_view.setMaximumBlockCount(1000)
-    window.log_view.setMinimumHeight(300)
+    window.log_view.setMinimumHeight(160)
     layout.addWidget(window.log_view, 1)
     layout.addWidget(button("读取板端最近日志", lambda: window.ssh.submit("logs")))
     layout.addWidget(button("复制当前日志", window.copy_logs))

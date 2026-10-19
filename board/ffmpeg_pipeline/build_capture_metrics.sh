@@ -11,11 +11,16 @@ export LD_LIBRARY_PATH="$root/runtime/lib:$root/runtime/lib64:${LD_LIBRARY_PATH:
 # causing GCC to move it behind installed FFmpeg headers despite an early -I.
 unset CPATH C_INCLUDE_PATH CPLUS_INCLUDE_PATH OBJC_INCLUDE_PATH
 cd "$build"
-patch="$root/patches/0002-capture-metrics.patch"
+if git apply --reverse --check "$root/patches/0003-capture-buffers.patch" >/dev/null 2>&1; then
+    echo 'Capture metrics and buffer patch already applied'
+else
+for patch in "$root"/patches/000[23]-*.patch; do
 if git apply --check "$patch"; then
     git apply "$patch"
 else
     git apply --reverse --check "$patch"
+fi
+done
 fi
 # Installed public FFmpeg headers share this private prefix with MPP/RGA.
 # Always prefer matching source headers when rebuilding internal translation units.
@@ -32,7 +37,7 @@ root=pathlib.Path(sys.argv[1]); path=root/'runtime/build-manifest.json'
 m=json.loads(path.read_text()) if path.exists() else {}
 m['captureMetricsBuiltAt']=datetime.datetime.now().astimezone().isoformat()
 hashes=m.setdefault('sha256',{})
-for p in [root/'runtime/bin/ffmpeg',root/'runtime/bin/ffprobe',root/'patches/0002-capture-metrics.patch']:
+for p in [root/'runtime/bin/ffmpeg',root/'runtime/bin/ffprobe']+sorted((root/'patches').glob('000[23]-*.patch')):
     hashes[str(p.relative_to(root))]=hashlib.sha256(p.read_bytes()).hexdigest()
 path.write_text(json.dumps(m,indent=2)+'\n')
 PY

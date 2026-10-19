@@ -1,0 +1,139 @@
+--- a/libavdevice/v4l2.c
++++ b/libavdevice/v4l2.c
+@@ -53,7 +53,6 @@
+ #include <libv4l2.h>
+ #endif
+ 
+-static const int desired_video_buffers = 8;
+ 
+ #define V4L_ALLFORMATS  3
+ #define V4L_RAWFORMATS  1
+@@ -96,6 +95,7 @@
+     int64_t last_time_m;
+ 
+     int buffers;
++    int capture_buffers;
+     atomic_int buffers_queued;
+     int plane_count;
+     unsigned int plane_pitch[VIDEO_MAX_PLANES];
+@@ -103,6 +103,7 @@
+     uint32_t capture_sequence;
+     int capture_sequence_valid;
+     int64_t capture_report_at;
++    int64_t capture_hold_max, capture_age_max;
+     void ***buf_start;
+     unsigned int **buf_len;
+     char *standard;
+@@ -365,7 +366,7 @@
+     struct video_data *s = ctx->priv_data;
+     struct v4l2_requestbuffers req = {
+         .type   = (s->multi_planer) ? V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE : V4L2_BUF_TYPE_VIDEO_CAPTURE,
+-        .count  = desired_video_buffers,
++        .count  = s->capture_buffers,
+         .memory = V4L2_MEMORY_MMAP
+     };
+ 
+@@ -380,6 +381,7 @@
+         return AVERROR(ENOMEM);
+     }
+     s->buffers = req.count;
++    av_log(ctx, AV_LOG_INFO, "AV_CAPTURE_BUFFERS requested=%d actual=%d\n", s->capture_buffers, s->buffers);
+     s->buf_start = av_calloc(s->buffers, sizeof(void **));
+     if (!s->buf_start) {
+         av_log(ctx, AV_LOG_ERROR, "Cannot allocate buffer pointers\n");
+@@ -551,6 +553,8 @@
+         .length   = (s->multi_planer) ? VIDEO_MAX_PLANES : 0
+     };
+     struct timeval buf_ts;
++    int64_t dequeued_at = 0, buffer_age = 0;
++    uint32_t missing = 0, previous_sequence = 0;
+     int res;
+ 
+     pkt->size = 0;
+@@ -568,6 +572,12 @@
+     }
+ 
+     buf_ts = buf.timestamp;
++    if (s->pixelformat == V4L2_PIX_FMT_NV12M) {
++        dequeued_at = av_gettime_relative();
++        /* Driver timestamps are comparable only when explicitly MONOTONIC. */
++        if ((buf.flags & V4L2_BUF_FLAG_TIMESTAMP_MASK) == V4L2_BUF_FLAG_TIMESTAMP_MONOTONIC)
++            buffer_age = FFMAX(0, dequeued_at - (buf_ts.tv_sec * INT64_C(1000000) + buf_ts.tv_usec));
++    }
+ 
+     if (buf.index >= s->buffers) {
+         av_log(ctx, AV_LOG_ERROR, "Invalid buffer index received.\n");
+@@ -640,19 +650,15 @@
+             if (s->capture_sequence_valid) {
+                 uint32_t distance = buf.sequence - s->capture_sequence;
+                 /* Forward gaps only: ignore a driver sequence reset/backward jump. */
+-                if (distance > 1 && distance < UINT32_MAX / 2)
+-                    s->capture_gaps += distance - 1;
++                if (distance > 1 && distance < UINT32_MAX / 2) {
++                    missing = distance - 1;
++                    previous_sequence = s->capture_sequence;
++                    s->capture_gaps += missing;
++                }
+             }
+             s->capture_sequence = buf.sequence;
+             s->capture_sequence_valid = 1;
+             s->capture_frames++;
+-            if (av_gettime_relative() - s->capture_report_at >= 1000000) {
+-                s->capture_report_at = av_gettime_relative();
+-                av_log(ctx, AV_LOG_INFO, "AV_CAPTURE frames=%llu gaps=%llu width=%d height=%d errors=%llu mono_us=%lld\n",
+-                       (unsigned long long)s->capture_frames, (unsigned long long)s->capture_gaps,
+-                       s->width, s->height, (unsigned long long)s->capture_errors,
+-                       (long long)s->capture_report_at);
+-            }
+         } else if (V4L2_TYPE_IS_MULTIPLANAR(buf.type)) {
+             int totalbytes = 0;
+             for (int iplane = 0; iplane < buf.length; iplane++) {
+@@ -686,6 +692,24 @@
+         if (res) {
+             av_packet_unref(pkt);
+             return res;
++        }
++        if (s->pixelformat == V4L2_PIX_FMT_NV12M) {
++            int64_t now = av_gettime_relative();
++            int64_t hold = now - dequeued_at;
++            s->capture_hold_max = FFMAX(s->capture_hold_max, hold);
++            s->capture_age_max = FFMAX(s->capture_age_max, buffer_age);
++            /* Log only after QBUF: diagnostics must not delay buffer return. */
++            if (missing)
++                av_log(ctx, AV_LOG_WARNING, "AV_CAPTURE_GAP previous=%u current=%u missing=%u age_us=%lld hold_us=%lld\n",
++                       previous_sequence, s->capture_sequence, missing, (long long)buffer_age, (long long)hold);
++            if (now - s->capture_report_at >= 1000000) {
++                s->capture_report_at = now;
++                av_log(ctx, AV_LOG_INFO, "AV_CAPTURE frames=%llu gaps=%llu width=%d height=%d errors=%llu mono_us=%lld buffers=%d max_hold_us=%lld max_age_us=%lld\n",
++                       (unsigned long long)s->capture_frames, (unsigned long long)s->capture_gaps,
++                       s->width, s->height, (unsigned long long)s->capture_errors, (long long)now,
++                       s->buffers, (long long)s->capture_hold_max, (long long)s->capture_age_max);
++                s->capture_hold_max = s->capture_age_max = 0;
++            }
+         }
+     } else {
+         struct buff_data *buf_descriptor;
+@@ -1263,6 +1287,7 @@
+ #define DEC AV_OPT_FLAG_DECODING_PARAM
+ 
+ static const AVOption options[] = {
++    { "capture_buffers", "requested mmap capture buffers (bounded for raw 4K memory)", OFFSET(capture_buffers), AV_OPT_TYPE_INT, {.i64 = 16}, 4, 32, DEC },
+     { "standard",     "set TV standard, used only by analog frame grabber",       OFFSET(standard),     AV_OPT_TYPE_STRING, {.str = NULL }, 0, 0,       DEC },
+     { "channel",      "set TV channel, used only by frame grabber",               OFFSET(channel),      AV_OPT_TYPE_INT,    {.i64 = -1 },  -1, INT_MAX, DEC },
+     { "video_size",   "set frame size",                                           OFFSET(width),        AV_OPT_TYPE_IMAGE_SIZE, {.str = NULL},  0, 0,   DEC },
+--- a/libavdevice/v4l2_nv12m_copy.h
++++ b/libavdevice/v4l2_nv12m_copy.h
+@@ -42,8 +42,11 @@
+         const V4L2Nv12mPlane *plane = &planes[p];
+         size_t rows = p ? (size_t)height / 2 : (size_t)height;
+         uint8_t *dest = out + (p ? y_size : 0);
+-        for (size_t row = 0; row < rows; row++)
+-            memcpy(dest + row * width, plane->data + plane->data_offset + row * plane->pitch, width);
++        if (plane->pitch == (size_t)width)
++            memcpy(dest, plane->data + plane->data_offset, rows * width);
++        else
++            for (size_t row = 0; row < rows; row++)
++                memcpy(dest + row * width, plane->data + plane->data_offset + row * plane->pitch, width);
+     }
+     return 0;
+ }

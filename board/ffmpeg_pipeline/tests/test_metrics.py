@@ -4,7 +4,7 @@ import sys
 import tempfile
 from unittest.mock import patch, MagicMock
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from camera_control.metrics import Rates, session_rates, BoardMetrics
+from camera_control.metrics import Rates, session_rates, BoardMetrics, memory_usage
 from camera_control.controller import Controller
 from camera_control import transport
 
@@ -31,6 +31,14 @@ def test_counter_monotonic_reset_and_missing():
     assert rates.delta('frame', 2, 280, 8) is None
     assert rates.delta('frame', 2, 0, 9) is None
     assert rates.delta('frame', 2, None, 10) is None
+
+
+def test_host_memory_uses_available_not_free_or_cache_as_leak():
+    result = memory_usage('MemTotal: 1000 kB\nMemFree: 20 kB\nMemAvailable: 400 kB\n')
+    assert result == {'totalBytes': 1024000, 'usedBytes': 614400, 'percent': 60}
+    assert memory_usage('MemTotal: 1000 kB\n') == {}
+    assert memory_usage('MemTotal: 0 kB\nMemAvailable: 0 kB\n') == {}
+    assert memory_usage('MemTotal: 100 kB\nMemAvailable: 200 kB\n') == {}
 
 
 def test_stale_socket_is_stopped_service_not_failed_ssh(tmp_path):

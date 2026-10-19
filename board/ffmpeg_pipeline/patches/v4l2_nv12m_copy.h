@@ -42,8 +42,11 @@ static int v4l2_nv12m_copy(uint8_t *out, size_t out_size,
         const V4L2Nv12mPlane *plane = &planes[p];
         size_t rows = p ? (size_t)height / 2 : (size_t)height;
         uint8_t *dest = out + (p ? y_size : 0);
-        for (size_t row = 0; row < rows; row++)
-            memcpy(dest + row * width, plane->data + plane->data_offset + row * plane->pitch, width);
+        if (plane->pitch == (size_t)width)
+            memcpy(dest, plane->data + plane->data_offset, rows * width);
+        else
+            for (size_t row = 0; row < rows; row++)
+                memcpy(dest + row * width, plane->data + plane->data_offset + row * plane->pitch, width);
     }
     return 0;
 }

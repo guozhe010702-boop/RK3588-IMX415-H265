@@ -1,5 +1,5 @@
 {
-  "status": "BOARD_4K60_30MIN_PASSED_PC_LONG_TEST_DEFERRED",
+  "status": "PC_4K60_30MIN_COMPLETED_CAPTURE_SEQUENCE_GAPS_REMAIN",
   "originalBootSha256": "7cf5378f68e374aec8d2fe8b01e8ba4e8e36863a8b71f61ba670c5f6dc3bca7f",
   "candidateBootSha256": "9c35ccb2a09535277340fe81ad351d624f346b67bb9a96f577bfa1a6329f66b0",
   "bytes": 50827264,
@@ -89,7 +89,7 @@
   "realCamera4k60CaptureValidated": true,
   "boardPipeline4k60Validated": true,
   "fullChain4k60Validated": false,
-  "fullChainPendingReason": "PC 30-minute decode/Qt acceptance deferred by user; one additional capture sequence gap observed",
+  "fullChainPendingReason": "PC long test completed; additional capture sequence gaps remain",
   "boardAcceptance": {
     "scope": "REAL_CAMERA_4K60_LAN_WITH_HDMI",
     "requestedSeconds": 1800,
@@ -135,10 +135,59 @@
     "pcDecodeErrorsAfterWarmup": 0
   },
   "pcLongAcceptance": {
-    "completed": false,
-    "deferredByUser": true,
-    "partialSeconds": 941.9839999999967,
-    "partialSoftwareDecodeFps": 59.9919387343813
+    "scope": "REAL_CAMERA_4K60_LAN_30MIN",
+    "completed": true,
+    "durationSeconds": 1814.3439999999991,
+    "requestedSeconds": 1815,
+    "samples": 1814,
+    "boardSamples": 1508,
+    "warmupSeconds": 10,
+    "averages": {
+      "capture_fps": 59.9960442468765,
+      "encode_fps": 59.99456047056214,
+      "board_decode_fps": 59.952566754477665,
+      "pc_decode_fps": 59.99754563231779,
+      "qt_paint_fps": 58.29010445393232,
+      "rtsp_mbps": 20.23577922002823,
+      "pc_session_mbps": 20.23149729304239,
+      "nic_tx_mbps": 20.44801306729498,
+      "pc_cpu_percent": 10.352272727272727,
+      "gui_cpu_percent": 34.63880266075388,
+      "gui_rss_mib": 128.2038980217572,
+      "pc_decoder_rss_mib": 200.71944073932926,
+      "capture_hold_max_ms": 11.348553769401331,
+      "capture_age_max_ms": 42.6635243902439
+    },
+    "minimizedSamples": 0,
+    "staleSamples": 0,
+    "hiddenSamples": 0,
+    "below55PaintSamples": 45,
+    "pcDecodeErrorsAfterWarmup": 0,
+    "reconnects": 0,
+    "firstFrameSeconds": 1.4220000000004802,
+    "guiMemoryGrowthMiB": -15.78125,
+    "decoderMemoryGrowthMiB": 11.5859375,
+    "pcDecodeFps": 59.99654093175326,
+    "qtPaintFps": 58.288625984919804,
+    "pcCounterWindowSeconds": 1803.9539999999997,
+    "counterWindowSeconds": 1804.5117888219993,
+    "captureFps": 59.99514583268391,
+    "encoderFps": 59.99129552413165,
+    "boardDecodeFps": 59.998499688759736,
+    "additionalSequenceGaps": 1,
+    "initialGapCount": 109,
+    "captureErrors": 0,
+    "duplicateFrames": 0,
+    "droppedFrames": 0,
+    "captureProcessChanged": false,
+    "hardwareAndModeValid": true,
+    "passed": false,
+    "waitingBeforeMeasurementSeconds": 17.563000000000102,
+    "temporaryKeyRemoved": true,
+    "processElapsedIncludingPostCloseSeconds": 1969.8439999999991,
+    "durationBasis": "last completed telemetry sample; excludes closed-window Qt Tool event-loop wait",
+    "testHarnessShutdownNote": "All workers stopped at test end; explicit normal WM_QUIT was needed for the Tool-window event loop. Harness now exits when all workers stop.",
+    "pcDecodeAndVisiblePaintValidated": true
   },
   "recordingFrames": {
     "frames": 739,
@@ -150,7 +199,7 @@
     "scope": "Actual downloaded H.265 camera MP4, full source decode then 160x90 gray frame hash"
   },
   "automatedTests": {
-    "passed": 65,
+    "passed": 75,
     "subtestsPassed": 18
   },
   "portableSmoke": {
@@ -171,5 +220,110 @@
     "bitrate": 20000000,
     "gop": 60
   },
-  "servicesEnabledAtBoot": false
+  "servicesEnabledAtBoot": false,
+  "overviewUiShortAcceptance": {
+    "scope": "REAL_CAMERA_4K60_LAN_30MIN",
+    "completed": true,
+    "durationSeconds": 120.04600000000028,
+    "requestedSeconds": 120,
+    "samples": 120,
+    "boardSamples": 100,
+    "warmupSeconds": 10,
+    "averages": {
+      "capture_fps": 60.013754962256904,
+      "encode_fps": 60.00591403366035,
+      "board_decode_fps": 59.98033185400675,
+      "pc_decode_fps": 60.00203215193687,
+      "qt_paint_fps": 58.72077781029697,
+      "rtsp_mbps": 20.2173153255638,
+      "pc_session_mbps": 20.212126311828627,
+      "nic_tx_mbps": 24.450255713169096,
+      "pc_cpu_percent": 10.141818181818183,
+      "gui_cpu_percent": 34.38727272727273,
+      "gui_rss_mib": 145.5569247159091,
+      "pc_decoder_rss_mib": 189.81928267045456,
+      "capture_hold_max_ms": 10.924754545454546,
+      "capture_age_max_ms": 43.92489090909091,
+      "board_memory_percent": 25.642002066102012,
+      "pc_memory_percent": 56.428994258244856,
+      "board_cpu_percent": 36.079943085778865,
+      "pc_session_link_percent": 2.0212126311828627,
+      "nic_tx_percent": 2.4450255713169096
+    },
+    "validResourceSamples": 110,
+    "minimizedSamples": 0,
+    "staleSamples": 0,
+    "hiddenSamples": 0,
+    "below55PaintSamples": 3,
+    "pcDecodeErrorsAfterWarmup": 0,
+    "reconnects": 0,
+    "firstFrameSeconds": 0.8279999999995198,
+    "guiMemoryGrowthMiB": 0.1953125,
+    "decoderMemoryGrowthMiB": -2.6640625,
+    "pcDecodeFps": 60.00165066439215,
+    "qtPaintFps": 58.70863022366477,
+    "pcCounterWindowSeconds": 109.04700000000048,
+    "counterWindowSeconds": 108.02395504000015,
+    "captureFps": 59.99374377393736,
+    "encoderFps": 60.54212695302913,
+    "boardDecodeFps": 60.00520900757413,
+    "additionalSequenceGaps": 0,
+    "initialGapCount": 109,
+    "captureErrors": 0,
+    "duplicateFrames": 0,
+    "droppedFrames": 0,
+    "captureProcessChanged": false,
+    "hardwareAndModeValid": true,
+    "passed": false,
+    "waitingBeforeMeasurementSeconds": 17.14099999999962,
+    "temporaryKeyRemoved": true
+  },
+  "captureBufferOptimization": {
+    "requestedBuffers": 16,
+    "inputQueuePackets": 4,
+    "irqTrialDefault": false,
+    "irqAffinityRestored": true,
+    "gapEliminated": false
+  },
+  "bufferRegression": {
+    "cycles": 10,
+    "passed": true,
+    "codecs": [
+      "h264",
+      "h265"
+    ],
+    "restoredH2654k60": true
+  },
+  "sshSftpRegression": {
+    "cycles": 10,
+    "maximumConnectToPaintSeconds": 2.140000000001237,
+    "temporaryKeyRemoved": true,
+    "media": {
+      "recording": {
+        "programs": [],
+        "stream_groups": [],
+        "streams": [
+          {
+            "codec_name": "hevc",
+            "width": 3840,
+            "height": 2160,
+            "nb_frames": "734"
+          }
+        ],
+        "format": {
+          "duration": "12.233333"
+        }
+      },
+      "movie": {
+        "bytes": 30801249,
+        "sha256": "703826c8fca951ef3b4453b1e37f53e809dda44959d2cfcf670ead849531d3cb"
+      },
+      "downloadedMp4DecodeExitCode": 0,
+      "snapshot": {
+        "bytes": 860627,
+        "sha256": "e1b4f8af6d42c96efaad85107768a0a8309664f8b33ec76e6241f59b06883717"
+      },
+      "liveStillRunning": true
+    }
+  }
 }

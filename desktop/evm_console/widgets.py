@@ -1,10 +1,10 @@
 from PySide6.QtCore import Qt, QRectF
 from PySide6.QtGui import QImage, QPainter, QPen, QColor
-from PySide6.QtWidgets import QWidget, QLabel, QVBoxLayout, QFrame
+from PySide6.QtWidgets import QWidget, QLabel, QVBoxLayout, QFrame, QSizePolicy
 
 STYLE = """
 * { font-family: "Microsoft YaHei UI", "Segoe UI"; font-size: 13px; color: #dce7f4; }
-QMainWindow,QDialog { background: #0b1220; }
+QMainWindow,QDialog,QWidget#consoleRoot { background: #0b1220; }
 QWidget#page { background: #121e30; }
 QWidget#header { background: #101c2e; border-bottom: 1px solid #263650; }
 QFrame#panel,QFrame#metric { background: #121e30; border: 1px solid #263650; border-radius: 12px; }
@@ -31,6 +31,7 @@ QCheckBox { spacing: 7px; } QCheckBox::indicator { width: 16px; height: 16px; }
 QProgressBar { background: #0c1728; border: 1px solid #354b68; border-radius: 5px; text-align: center; }
 QProgressBar::chunk { background: #138e9f; border-radius: 4px; }
 QScrollArea { border: 0; background: transparent; } QScrollBar:vertical { background: #101c2e; width: 9px; }
+QSplitter::handle { background: #0b1220; }
 QScrollBar::handle:vertical { background: #3a516d; border-radius: 4px; min-height: 25px; }
 QToolTip { background: #20344e; border: 1px solid #5a789b; color: white; }
 """
@@ -40,6 +41,7 @@ class Badge(QLabel):
     def __init__(self, title):
         super().__init__()
         self.title = title
+        self.setWordWrap(True)
         self.set_state(False)
 
     def set_state(self, ok, text=None):
@@ -54,12 +56,16 @@ class Metric(QFrame):
     def __init__(self, title, value="—"):
         super().__init__()
         self.setObjectName("metric")
+        self.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(16, 12, 16, 12)
+        layout.setContentsMargins(10, 6, 10, 6)
         label = QLabel(title)
         label.setObjectName("muted")
+        label.setWordWrap(True)
         self.value = QLabel(value)
         self.value.setObjectName("metricValue")
+        self.value.setWordWrap(True)
+        self.value.setStyleSheet("font-size:18px")
         layout.addWidget(label)
         layout.addWidget(self.value)
 
@@ -73,13 +79,16 @@ class VideoCanvas(QWidget):
         self.painted_sequence = 0
         self.discarded_frames = 0
         self.message = "连接开发板，打开实时画面"
-        self.setMinimumSize(400, 180)
+        self.setMinimumSize(300, 170)
 
     def set_frame(self, data, width, height):
         if self.submitted_frames != self.painted_sequence:
             self.discarded_frames += 1
         self.submitted_frames += 1
-        self.image = QImage(data, width, height, width * 3, QImage.Format.Format_BGR888).copy()
+        # Immutable Python bytes own the pixels until the next frame. Retain
+        # that owner explicitly and avoid an extra 2.6 MiB copy on every frame.
+        self._pixels = data
+        self.image = QImage(self._pixels, width, height, width * 3, QImage.Format.Format_BGR888)
         self.message = ""
         self.update()
 
@@ -87,6 +96,7 @@ class VideoCanvas(QWidget):
         self.message = text
         if clear:
             self.image = None
+            self._pixels = None
         self.update()
 
     def paintEvent(self, event):

@@ -38,6 +38,15 @@ def test_extracted_layout_keeps_snapshot_callback(tmp_path, monkeypatch):
         window.action_buttons["snapshot"].click()
         assert jobs == [("snapshot",)] and window.operation_busy
         assert window.pages.count() == 5
+        window.show()
+        app.processEvents()
+        assert not window.key_file.isVisible()
+        window.auth.setCurrentIndex(1)
+        app.processEvents()
+        assert window.key_file.isVisible()
+        window.auth.setCurrentIndex(0)
+        app.processEvents()
+        assert not window.key_file.isVisible()
     finally:
         close_window(app, window)
 

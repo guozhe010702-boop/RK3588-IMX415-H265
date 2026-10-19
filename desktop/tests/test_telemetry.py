@@ -31,6 +31,15 @@ def test_counter_delta_reset_missing_and_restart():
     assert rates.delta('fps', 2, 122, 6) is None
 
 
+def test_gap_total_stays_truthful_and_observation_baseline_resets():
+    rates = Rates()
+    assert rates.since('gaps', 123, 108) == (0,108)
+    assert rates.since('gaps', 123, 109) == (1,108)
+    assert rates.since('gaps', 456, 20) == (0,20)
+    assert rates.since('gaps', 456, None) == (None,None)
+    assert rates.since('gaps', 456, 30) == (0,30)
+
+
 def test_missing_stale_and_client_association():
     rates = Rates()
     board = {'config': PERFORMANCE_CONFIG, 'frame': 120, 'metrics': {
@@ -46,6 +55,20 @@ def test_missing_stale_and_client_association():
     row = flatten(board, video(), {}, rates, 15, 65, 1, 10, True)
     assert row['board_stale'] and row['encode_fps'] is None and row['pc_session_mbps'] is None
     assert row['pc_decode_fps'] is None
+
+
+def test_subscription_utilization_is_not_total_nic_or_other_session():
+    board = {'capturePid': 123, 'metrics': {'stale': False, 'ageSeconds': 0,
+        'capture': {'stale': False, 'sequenceGaps': 100},
+        'hostMemory': {'percent':25, 'usedBytes':4*1024**3, 'totalBytes':16*1024**3},
+        'clients': [{'clientId':'a'*32, 'mbps':20.2}, {'clientId':'b'*32, 'mbps':20}],
+        'interfaces':[{'name':'eth1','linkMbps':1000,'txMbps':40.8,'txUtilizationPercent':4.08}]}}
+    row = flatten(board, video(), {}, Rates(), 10, 0, 1, 10, True)
+    assert row['pc_session_mbps'] == 20.2
+    assert abs(row['pc_session_link_percent']-2.02) < 0.00001
+    assert row['nic_tx_percent'] == 4.08
+    assert row['board_memory_percent'] == 25
+    assert row['board_memory_used_gib'] == 4
 
 
 def test_only_new_frames_are_painted():

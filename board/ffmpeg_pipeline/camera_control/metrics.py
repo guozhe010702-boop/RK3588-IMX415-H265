@@ -32,6 +32,18 @@ def read_number(path):
         return None
 
 
+def memory_usage(text):
+    """Linux kB values are KiB. MemAvailable includes reclaimable cache."""
+    fields = dict(re.findall(r'^(MemTotal|MemAvailable):\s+(\d+)\s+kB$', text, re.M))
+    if not all(key in fields for key in ('MemTotal', 'MemAvailable')):
+        return {}
+    total, available = (int(fields[key]) * 1024 for key in ('MemTotal', 'MemAvailable'))
+    if total <= 0 or not 0 <= available <= total:
+        return {}
+    return {'totalBytes': total, 'usedBytes': total-available,
+            'percent': 100 * (total-available) / total}
+
+
 def api(path):
     try:
         with urllib.request.urlopen('http://127.0.0.1:9997/v3/' + path, timeout=0.4) as response:
@@ -129,6 +141,9 @@ class BoardMetrics:
                 match = re.search(r'AV_CAPTURE frames=(\d+) gaps=(\d+) width=(\d+) height=(\d+) errors=(\d+) mono_us=(\d+)', line)
                 if match:
                     raw = dict(zip(('frames', 'sequenceGaps', 'width', 'height', 'errors', 'monotonicUs'), map(int, match.groups())))
+                    extra = re.search(r'buffers=(\d+) max_hold_us=(\d+) max_age_us=(\d+)', line)
+                    if extra:
+                        raw.update(zip(('buffers', 'maxHoldUs', 'maxAgeUs'), map(int, extra.groups())))
         marker = (pid, raw.get('frames')) if raw else None
         if marker != self.capture_marker:
             self.capture_marker, self.capture_at = marker, now if marker else None
@@ -186,12 +201,17 @@ class BoardMetrics:
             pass
         if not c.last_frame_at or now - c.last_frame_at > 4:
             encoded = None
+        try:
+            memory = memory_usage(Path('/proc/meminfo').read_text())
+        except OSError:
+            memory = {}
         result = {'schemaVersion': 1, 'sampledAt': stamp(), 'monotonic': now,
                   'capture': capture, 'encoderFps': encoded, 'decoder': decoder,
                   'targetBitrate': config['bitrate'],
                   'rtspMbps': inbound * 8 / 1e6 if inbound is not None else None,
                   'clients': session_rates(sessions.get('items', []), self.rates, now),
                   'interfaces': interfaces, 'processes': processes, 'hostCpuPercent': host_cpu,
+                  'hostMemory': memory,
                   'temperatures': temperatures, 'vpu': frequencies}
         with self.lock:
             self.cached, self.media = result, media

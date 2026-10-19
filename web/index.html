@@ -248,7 +248,7 @@ footer .mono{color:#b9c7d5;font-size:12px}
     <div class="hero-actions">
       <a class="action primary" href="../docs/architecture/项目程序逻辑与目录导航.md">先看程序逻辑与目录 →</a>
       <a class="action" href="../docs/guides/Windows_相机控制台操作指南.md">使用 Windows 桌面控制台 →</a>
-      <a class="action" href="../releases/EVM3588CameraConsole-Windows-x64-v1.2.1.zip" download>下载本地 1.2.1 EXE</a>
+      <a class="action" href="../releases/EVM3588CameraConsole-Windows-x64-v1.2.2.zip" download>下载本地 1.2.2 EXE</a>
       <a class="action" href="#start">查看解压与部署</a>
       <a class="action" href="../releases/av_dev-source.zip" download>下载本地代码包</a>
       <a class="action" href="../README.md">查看 README</a>
@@ -271,7 +271,7 @@ footer .mono{color:#b9c7d5;font-size:12px}
   </div>
 </div>
 
-<div class="note info"><b>性能监测 1.2.1：</b>真实相机板端 30 分钟：采集/编码/硬解约 59.99 fps，新增 1 个驱动序号缺口。电脑端前台一分钟约 59.96 fps 解码、58.40 fps 绘制；电脑完整长测按用户安排后续进行。<a href="../docs/history/4K60与性能监测验收.md">完整实测与边界</a>、<a href="../docs/guides/4K60与性能监测.md">操作与指标口径</a>。</div>
+<div class="note info"><b>性能监测 1.2.2：</b>带宽与 CPU/内存卡片、可调整分栏及框外时间刻度。真实相机电脑 30 分钟：解码 60.00、绘制 58.29 fps；新增采集缺口 1，严格零缺口验收仍未通过。<a href="../docs/history/4K60与性能监测验收.md">完整实测与边界</a>、<a href="../docs/guides/4K60与性能监测.md">操作与指标口径</a>。</div>
 <!-- ===== 当前板端状态与主链路 ===== -->
 <section id="runtime">
   <div class="wrap">
@@ -309,7 +309,7 @@ python3 /userdata/av_dev/ffmpeg_pipeline/avctl.py preview-start</pre></div>
     </div>
     <div class="codewrap"><div class="codebar"><span class="fn">电脑 PowerShell · RTSP 实时播放</span><button class="copy" type="button">复制</button></div><pre>ffplay -rtsp_transport tcp -fflags nobuffer -flags low_delay -framedrop rtsp://192.168.2.221:8554/imx415</pre></div>
     <p class="muted"><code>ffplay</code> 播放视频；<code>-rtsp_transport tcp</code> 用 TCP 传输，<code>-fflags nobuffer</code> 减少输入缓存，<code>-flags low_delay</code> 请求低延迟解码，<code>-framedrop</code> 在显示落后时丢弃显示帧。地址是板端 IP、8554 端口和 <code>/imx415</code> 路径。加入时可能需要等待下一个关键帧。若板子 IP 变化，板端 <code>hostname -I</code> 可查询新地址。</p>
-    <div class="note ok"><b>项目源码已梳理：</b><a href="../docs/architecture/项目程序逻辑与目录导航.md">程序逻辑与目录导航</a> · <a href="../docs/history/项目结构整理记录.md">本轮整理与验证</a> · 桌面软件 1.2.1：<a href="../docs/architecture/Windows_控制台优化调研与实施.md">优化调研与改进</a> · <a href="../docs/guides/Windows_相机控制台操作指南.md">Windows 中文控制台使用说明</a> · <a href="../docs/history/Windows_相机控制台验收记录.md">桌面实际验收</a> · <a href="../docs/guides/FFmpeg_全链路操作指南.md">底层 FFmpeg 操作指南</a>。通过 SSH 控制、RTSP 实时预览、H.264/H.265 参数、HDMI、截图、MP4 与 SFTP 下载；无需每次手输命令。EXE 压缩包在本地交付，下载按钮读取 releases/ 中的本地交付文件。</div>
+    <div class="note ok"><b>项目源码已梳理：</b><a href="../docs/architecture/项目程序逻辑与目录导航.md">程序逻辑与目录导航</a> · <a href="../docs/history/项目结构整理记录.md">本轮整理与验证</a> · 桌面软件 1.2.2：<a href="../docs/architecture/Windows_控制台优化调研与实施.md">优化调研与改进</a> · <a href="../docs/guides/Windows_相机控制台操作指南.md">Windows 中文控制台使用说明</a> · <a href="../docs/history/Windows_相机控制台验收记录.md">桌面实际验收</a> · <a href="../docs/guides/FFmpeg_全链路操作指南.md">底层 FFmpeg 操作指南</a>。通过 SSH 控制、RTSP 实时预览、H.264/H.265 参数、HDMI、截图、MP4 与 SFTP 下载；无需每次手输命令。EXE 压缩包在本地交付，下载按钮读取 releases/ 中的本地交付文件。</div>
   </div>
 </section>
 

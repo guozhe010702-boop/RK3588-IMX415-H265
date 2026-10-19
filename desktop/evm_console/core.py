@@ -214,6 +214,6 @@ class FrameAssembler:
             self.complete_frames += count
             self.discarded_frames += count - 1
             offset = (count - 1) * self.size
-            latest = bytes(self.buffer[offset : offset + self.size])
+            latest = bytes(memoryview(self.buffer)[offset : offset + self.size])
             del self.buffer[: count * self.size]
         return latest

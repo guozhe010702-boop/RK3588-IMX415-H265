@@ -1,17 +1,17 @@
 # Windows 相机控制台：安装、操作与源码修改
 
-版本 1.2.1。中文深色桌面软件，主界面为实时视频，右侧为设备连接、编码设置、媒体文件、运行日志和性能监测。新增指标与 CSV 见 [4K60 与性能监测](4K60与性能监测.md)。硬编在 RK3588，电脑负责控制、解码与下载。4K60 预设不代表当前传感器已支持。
+版本 1.2.2。中文深色桌面软件，主界面为实时视频，右侧为设备连接、编码设置、媒体文件、运行日志和性能监测。性能页先显示带宽、CPU、内存和帧率卡片，再按需展开趋势或详细指标。指标与 CSV 见 [4K60 与性能监测](4K60与性能监测.md)。硬编在 RK3588，电脑负责控制、解码与下载。4K60 预设不代表当前传感器已支持。
 
 ## 1. 双击使用免安装版
 
-本地交付文件是`releases/EVM3588CameraConsole-Windows-x64-v1.2.1.zip`，其 `.zip.sha256` 文件保存校验值。解压整个压缩包，进入 `EVM3588CameraConsole` 文件夹，双击 `EVM3588CameraConsole.exe`。
+本地交付文件是`releases/EVM3588CameraConsole-Windows-x64-v1.2.2.zip`，其 `.zip.sha256` 文件保存校验值。解压整个压缩包，进入 `EVM3588CameraConsole` 文件夹，双击 `EVM3588CameraConsole.exe`。
 
 保留 EXE、`_internal/`、`ffmpeg/`、许可说明和版本记录之间的相对位置。无需安装 Python；不要只把 EXE 单独拖到其它目录。可把 EXE 的快捷方式放在桌面。
 
 若采用终端解压，**电脑 PowerShell，项目根目录**：
 
 ```powershell
-Expand-Archive -LiteralPath '.\releases\EVM3588CameraConsole-Windows-x64-v1.2.1.zip' -DestinationPath '.\桌面控制台'
+Expand-Archive -LiteralPath '.\releases\EVM3588CameraConsole-Windows-x64-v1.2.2.zip' -DestinationPath '.\桌面控制台'
 ```
 
 解释：`Expand-Archive` 解压 ZIP；`-LiteralPath` 按原样处理输入文件名；`-DestinationPath` 指定新目录。本示例目标目录应尚未使用，重复解压请换新目录。

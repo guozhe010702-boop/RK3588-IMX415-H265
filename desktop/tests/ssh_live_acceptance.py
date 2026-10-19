@@ -25,10 +25,11 @@ def main():
     parser.add_argument('--provision-temporary-key', action='store_true', required=True)
     parser.add_argument('--cycles', type=int, default=10)
     parser.add_argument('--media', action='store_true')
+    parser.add_argument('--adb', type=Path, default=ROOT.parent / 'Tools/platform-tools/adb.exe')
     args = parser.parse_args()
     args.output.mkdir(parents=True, exist_ok=True)
     os.environ['EVM_CONSOLE_DATA'] = str((args.output / 'user-data').resolve())
-    adb = str(ROOT.parent / 'Tools/platform-tools/adb.exe')
+    adb = str(args.adb)
     def run(*arguments):
         return subprocess.check_output([adb, *arguments], text=True, timeout=15)
     key = paramiko.RSAKey.generate(2048)

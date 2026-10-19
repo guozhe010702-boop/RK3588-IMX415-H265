@@ -23,6 +23,10 @@ if not destination.exists() or hashlib.sha256(destination.read_bytes()).hexdiges
 version=subprocess.check_output([str(source),'-version'],text=True,encoding='utf-8',errors='replace')
 manifest={'application':__version__,'python':sys.version,'ffmpegSha256':source_digest,
           'ffmpegVersion':version,'dependencies':{item.metadata['Name']:item.version for item in importlib.metadata.distributions()}}
+application_sources = [ROOT/'main.py', ROOT/'requirements.lock.txt', ROOT/'README_PORTABLE.txt',
+                       ROOT/'THIRD_PARTY_NOTICES.md'] + sorted((ROOT/'evm_console').glob('*.py'))
+manifest['sourceSha256'] = {str(p.relative_to(ROOT)):hashlib.sha256(p.read_bytes()).hexdigest()
+                            for p in application_sources}
 (ROOT/'vendor/build-manifest.json').write_text(json.dumps(manifest,indent=2),encoding='utf-8')
 # PNG icon is rendered from the project SVG; PyInstaller converts it for Windows.
 from PySide6.QtGui import QImage,QPainter
@@ -38,6 +42,9 @@ command=[sys.executable,'-m','PyInstaller','--noconfirm','--onedir','--windowed'
          '--exclude-module','PySide6.QtQuick','--exclude-module','PySide6.QtPdf','--exclude-module','pytest',
          str(ROOT/'main.py')]
 subprocess.run(command,check=True,cwd=ROOT)
+if manifest['sourceSha256'] != {str(p.relative_to(ROOT)):hashlib.sha256(p.read_bytes()).hexdigest()
+                               for p in application_sources}:
+    raise SystemExit('Application sources changed during packaging; rebuild before delivery')
 delivery=ROOT.parent/'releases/desktop'/__version__/'EVM3588CameraConsole'; ffmpeg=delivery/'ffmpeg'; ffmpeg.mkdir(exist_ok=True)
 shutil.copy2(source,ffmpeg/'ffmpeg.exe')
 for name in ('README_PORTABLE.txt','THIRD_PARTY_NOTICES.md'): shutil.copy2(ROOT/name,delivery/name)

@@ -36,21 +36,22 @@ from .ssh import SSHWorker, trust_host
 from .video import VideoWorker
 from .files import FileWorker
 from .widgets import STYLE
-from .layout import build_ui, button
+from .layout import build_ui, button, apply_density
 from .playback import LocalVideoDialog
 from .telemetry import PerformanceWorker
-from .performance import number
+from .performance import number, update_overview
 
 
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("EVM3588 相机控制台")
-        self.setMinimumSize(960, 600)
         screen = QGuiApplication.primaryScreen()
         available = screen.availableGeometry() if screen else None
-        self.resize(max(960, min(1420, available.width() - 24)) if available else 1420,
-                    max(600, min(900, available.height() - 40)) if available else 900)
+        width = max(320, available.width() - 24) if available else 1420
+        height = max(240, available.height() - 40) if available else 900
+        self.setMinimumSize(min(760, width), min(480, height))
+        self.resize(min(1420, width), min(900, height))
         self.setStyleSheet(STYLE)
         self.connection, self.download_dir, auto = load_preferences()
         self.board = {}
@@ -128,10 +129,16 @@ class MainWindow(QMainWindow):
         self.files.busy.connect(self.on_file_busy)
 
     def select_page(self, index):
-        self.side_panel.setFixedWidth(500 if index == 4 else 350)
         self.pages.setCurrentIndex(index)
         for i, item in enumerate(self.tab_buttons):
             item.setChecked(i == index)
+
+    def eventFilter(self, watched, event):
+        if (watched is getattr(self, "video_panel", None)
+                and event.type() == QEvent.Type.Resize
+                and hasattr(self, "toolbar_grid")):
+            apply_density(self, event.size().width())
+        return super().eventFilter(watched, event)
 
     def choose_key(self):
         file, _ = QFileDialog.getOpenFileName(self, "选择 SSH 私钥")
@@ -478,6 +485,7 @@ class MainWindow(QMainWindow):
         if self.closing:
             return
         self.latest_performance = row
+        update_overview(self, row)
         self.fps_trend.append(row)
         self.flow_trend.append(row)
         self.metrics['fps'].value.setText(number(row.get('encode_fps'), ' fps'))
@@ -486,12 +494,15 @@ class MainWindow(QMainWindow):
             + ' · Qt 绘制 ' + number(row.get('qt_paint_fps'), ' fps')
             + ' · 订阅流速 ' + number(row.get('pc_session_mbps'), ' Mbit/s')
             + ' · ' + (row.get('bottleneck') or '每秒差分采样'))
-        self.performance_note.setText(('已过期' if row['board_stale'] else '指标正常')
-            + ' · 板端数据年龄 ' + number(row.get('board_age_s'), 's')
-            + '\n' + (row.get('bottleneck') or '十分钟趋势；进程 CPU 以一个逻辑核为 100%'))
+        self.performance_note.setText(('板端数据已过期' if row['board_stale'] else '实时资源 · 每秒刷新')
+            + ' · 数据年龄 ' + number(row.get('board_age_s'), 's')
+            + '\n' + (row.get('bottleneck') or 'CPU 卡片为整机占用；进程占用见详细指标'))
         pairs = [
             ('采集 / 传感器', number(row.get('capture_fps'), ' fps') + ' / ' + number(row.get('sensor_fps'), ' fps')),
             ('驱动序号缺口 / 错帧', number(row.get('capture_gaps'), digits=0) + ' / ' + number(row.get('capture_errors'), digits=0)),
+            ('本次连接新增缺口 / 基线', number(row.get('capture_new_gaps'), digits=0) + ' / ' + number(row.get('capture_gap_baseline'), digits=0)),
+            ('采集缓冲 / 周转峰值', number(row.get('capture_buffers'), digits=0) + ' / ' + number(row.get('capture_hold_max_ms'), ' ms')),
+            ('采集时间戳年龄峰值', number(row.get('capture_age_max_ms'), ' ms') + '（最近采样窗口）'),
             ('板端硬解', (row.get('board_decode_size') or '不可用') + ' · ' + number(row.get('board_decode_fps'), ' fps')),
             ('解码器 / VPU 设备', (row.get('board_decoder_name') or '不可用') + ' / ' + ('已打开' if row.get('board_decoder_vpu_open') else '未确认')),
             ('板解状态 / 错误', ('运行' if row.get('board_decode_running') else '未运行') + ' / ' + (row.get('board_decode_error') or '无已报告错误')),
@@ -503,6 +514,7 @@ class MainWindow(QMainWindow):
             ('网口 TX / RX', (row.get('nic_name') or '不可用') + ' · ' + number(row.get('nic_tx_mbps')) + ' / ' + number(row.get('nic_rx_mbps'), ' Mbit/s')),
             ('链路 / TX 占用', number(row.get('link_mbps'), ' Mbit/s') + ' / ' + number(row.get('nic_tx_percent'), '%')),
             ('板端 / 电脑 CPU', number(row.get('board_cpu_percent'), '%') + ' / ' + number(row.get('pc_cpu_percent'), '%')),
+            ('板端 / 电脑内存占用', number(row.get('board_memory_percent'), '%') + ' / ' + number(row.get('pc_memory_percent'), '%')),
             ('编码 / 板解内存', number(row.get('board_encoder_rss_mib')) + ' / ' + number(row.get('board_decoder_rss_mib'), ' MiB')),
             ('编码 / 板解 CPU', number(row.get('board_encoder_cpu_percent'), '%') + ' / ' + number(row.get('board_decoder_cpu_percent'), '%')),
             ('电脑解码 / 界面内存', number(row.get('pc_decoder_rss_mib')) + ' / ' + number(row.get('gui_rss_mib'), ' MiB')),
@@ -511,7 +523,7 @@ class MainWindow(QMainWindow):
             ('VPU 频率 Hz', row.get('vpu_frequencies') or '不可用'),
             ('首帧等待 / 帧年龄', number(row.get('first_frame_s'), 's') + ' / ' + number(row.get('video_age_s'), 's')),
         ]
-        self.performance_detail.setText('\n'.join(title + '：' + value for title, value in pairs)
+        self.performance_detail.setPlainText('\n'.join(title + '：' + value for title, value in pairs)
             + '\nCSV：' + (row.get('csv_path') or '等待写入')
             + ('\n保存失败：' + row['csv_error'] if row.get('csv_error') else ''))
 
@@ -653,6 +665,9 @@ class MainWindow(QMainWindow):
         super().changeEvent(event)
         if event.type() == QEvent.Type.WindowStateChange and hasattr(self, 'performance'):
             self.performance.set_window_minimized(self.isMinimized())
+            if not self.closing:
+                self.add_log("播放", "窗口已最小化，实际绘制会暂停，板端任务继续"
+                    if self.isMinimized() else "窗口已还原，恢复实际预览绘制")
 
     def closeEvent(self, event):
         if not self.closing:

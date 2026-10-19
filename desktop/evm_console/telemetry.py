@@ -16,6 +16,16 @@ from .core import data_root
 class Rates:
     def __init__(self):
         self.previous = {}
+        self.baselines = {}
+
+    def since(self, key, identity, value):
+        if value is None:
+            self.baselines.pop(key, None)
+            return None, None
+        old = self.baselines.get(key)
+        if old is None or old[0] != identity or value < old[1]:
+            old = self.baselines[key] = (identity, value)
+        return value-old[1], old[1]
 
     def delta(self, key, identity, value, now):
         old = self.previous.pop(key, None)
@@ -28,12 +38,16 @@ class Rates:
 
 
 COLUMNS = ('time', 'board_stale', 'board_age_s', 'capture_fps', 'capture_gaps',
+           'capture_new_gaps', 'capture_gap_baseline',
+           'capture_buffers', 'capture_hold_max_ms', 'capture_age_max_ms',
            'capture_errors', 'sensor_fps', 'encode_fps', 'encode_frames', 'encode_drops',
            'encode_duplicates', 'board_decoder_name', 'board_decoder_vpu_open', 'board_decode_fps', 'board_decode_size', 'board_decode_running', 'board_decode_error', 'hdmi_size', 'monitor_mode',
            'pc_decode_fps', 'pc_decode_size', 'qt_paint_fps', 'window_minimized', 'preview_size',
            'preview_discarded', 'pc_decode_errors', 'reconnects', 'first_frame_s', 'video_age_s', 'target_mbps',
-           'rtsp_mbps', 'pc_session_mbps', 'nic_name', 'nic_tx_mbps', 'nic_rx_mbps', 'link_mbps',
-           'nic_tx_percent', 'nic_rx_percent', 'board_cpu_percent', 'board_encoder_cpu_percent',
+           'rtsp_mbps', 'pc_session_mbps', 'pc_session_link_percent', 'nic_name', 'nic_tx_mbps', 'nic_rx_mbps', 'link_mbps',
+           'nic_tx_percent', 'nic_rx_percent', 'board_cpu_percent',
+           'board_memory_percent', 'board_memory_used_gib', 'board_memory_total_gib',
+           'pc_memory_percent', 'pc_memory_used_gib', 'pc_memory_total_gib', 'board_encoder_cpu_percent',
            'board_encoder_rss_mib', 'board_decoder_cpu_percent', 'board_decoder_rss_mib',
            'pc_cpu_percent', 'gui_cpu_percent', 'gui_rss_mib', 'pc_decoder_cpu_percent',
            'pc_decoder_rss_mib', 'board_temperature_c', 'vpu_frequencies', 'bottleneck')
@@ -50,6 +64,8 @@ def flatten(board, video, local, rates, now, painted, paint_identity, received_a
     stale = not connected or not m or bool(m.get('stale')) or board_age is None or board_age > 3
     fresh = {} if stale else m
     capture = fresh.get('capture', {})
+    new_gaps, gap_baseline = rates.since('capture-gaps', board.get('capturePid'),
+        capture.get('sequenceGaps') if not capture.get('stale', True) else None)
     decoder = fresh.get('decoder', {})
     sessions = [s for s in fresh.get('clients', []) if s.get('clientId') == video['clientId']]
     session_rate = (sum(s['mbps'] for s in sessions)
@@ -68,6 +84,10 @@ def flatten(board, video, local, rates, now, painted, paint_identity, received_a
     result.update(time=datetime.now().astimezone().isoformat(), board_stale=stale,
         board_age_s=board_age, capture_fps=None if capture.get('stale') else capture.get('fps'),
         capture_gaps=capture.get('sequenceGaps'), capture_errors=capture.get('errors'),
+        capture_new_gaps=new_gaps, capture_gap_baseline=gap_baseline,
+        capture_buffers=capture.get('buffers'),
+        capture_hold_max_ms=capture['maxHoldUs'] / 1000 if capture.get('maxHoldUs') is not None else None,
+        capture_age_max_ms=capture['maxAgeUs'] / 1000 if capture.get('maxAgeUs') is not None else None,
         sensor_fps=(board.get('actualCapture') or {}).get('reportedFps') if not stale else None,
         encode_fps=fresh.get('encoderFps'), encode_frames=board.get('frame') if not stale else None,
         encode_drops=board.get('droppedFrames') if not stale else None,
@@ -85,9 +105,13 @@ def flatten(board, video, local, rates, now, painted, paint_identity, received_a
         first_frame_s=video.get('firstFrameSeconds'), video_age_s=video_age,
         target_mbps=config.get('bitrate', 0) / 1e6 if config else None,
         rtsp_mbps=fresh.get('rtspMbps'), pc_session_mbps=session_rate,
+        pc_session_link_percent=session_rate/nic['linkMbps']*100 if session_rate is not None and nic.get('linkMbps') else None,
         nic_name=nic.get('name'), nic_tx_mbps=nic.get('txMbps'), nic_rx_mbps=nic.get('rxMbps'), link_mbps=nic.get('linkMbps'),
         nic_tx_percent=nic.get('txUtilizationPercent'), nic_rx_percent=nic.get('rxUtilizationPercent'),
         board_cpu_percent=fresh.get('hostCpuPercent'),
+        board_memory_percent=fresh.get('hostMemory', {}).get('percent'),
+        board_memory_used_gib=fresh['hostMemory']['usedBytes'] / 1024**3 if fresh.get('hostMemory', {}).get('usedBytes') is not None else None,
+        board_memory_total_gib=fresh['hostMemory']['totalBytes'] / 1024**3 if fresh.get('hostMemory', {}).get('totalBytes') is not None else None,
         board_temperature_c=max((t['celsius'] for t in fresh.get('temperatures', [])), default=None),
         vpu_frequencies=';'.join('{}={}'.format(v['name'], v['frequencyHz']) for v in fresh.get('vpu', [])) or None)
     for name in ('encoder', 'decoder'):
@@ -174,6 +198,10 @@ class PerformanceWorker(QThread):
                     self.processes = {pid: p for pid, p in self.processes.items() if pid in active_pids}
                     local = dict(pc_cpu_percent=psutil.cpu_percent(), gui_cpu_percent=gui_cpu,
                         gui_rss_mib=gui_rss, pc_decoder_cpu_percent=dec_cpu, pc_decoder_rss_mib=dec_rss)
+                    memory = psutil.virtual_memory()
+                    local.update(pc_memory_percent=100*(memory.total-memory.available)/memory.total,
+                        pc_memory_used_gib=(memory.total-memory.available)/1024**3,
+                        pc_memory_total_gib=memory.total/1024**3)
                     row = flatten(board, video, local, self.rates, start, self.canvas.painted_frames,
                                   video['generation'], received, connected, minimized)
                     if current_folder != folder:

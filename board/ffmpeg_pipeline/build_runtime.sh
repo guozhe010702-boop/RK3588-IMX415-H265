@@ -58,6 +58,12 @@ ninja -C "$build/rga-build" -j4
 ninja -C "$build/rga-build" install
 echo 'PHASE: patched FFmpeg'
 cd "$build/ffmpeg"
+if git apply --reverse --check "$root/patches/0003-capture-buffers.patch" >/dev/null 2>&1; then
+  echo 'All three private capture patches already applied'
+else
+if git apply --reverse --check "$root/patches/0002-capture-metrics.patch" >/dev/null 2>&1; then
+  git apply "$root/patches/0003-capture-buffers.patch"
+else
 for patch in "$root"/patches/0*.patch; do
   if git apply --check "$patch"; then
     git apply "$patch"
@@ -65,6 +71,8 @@ for patch in "$root"/patches/0*.patch; do
     git apply --reverse --check "$patch"
   fi
 done
+fi
+fi
 export PKG_CONFIG_PATH="$prefix/lib/pkgconfig:$prefix/lib64/pkgconfig:${PKG_CONFIG_PATH:-}"
 export LD_LIBRARY_PATH="$prefix/lib:$prefix/lib64:${LD_LIBRARY_PATH:-}"
 ./configure --prefix="$prefix" --disable-autodetect --disable-doc --disable-debug --disable-ffplay --enable-version3 --enable-libdrm --enable-rkmpp --enable-rkrga --extra-cflags="-I. -I$prefix/include" --extra-ldflags="-L$prefix/lib -Wl,-rpath,$prefix/lib"
