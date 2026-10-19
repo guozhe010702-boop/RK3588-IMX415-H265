@@ -1,6 +1,6 @@
 # EVM3588 Camera Console
 
-1.2.0 新增“性能监测”页、60 fps 预览上限与自动 CSV，见 [指标说明](../docs/guides/4K60与性能监测.md)。真实相机 4K60 仍待 BSP 系统切换验证。
+1.2.1 根据实机能力区分“待驱动适配”“模式已可用”和“完整验收通过”，保留性能面板、60 fps 预览与自动 CSV。实际 boot 切换及 4K60 实测进度见 [验收记录](../docs/history/4K60与性能监测验收.md)，统计口径见 [指标说明](../docs/guides/4K60与性能监测.md)。
 
 Windows 中文桌面客户端：PySide6 界面、Paramiko SSH/SFTP、独立 FFmpeg 解码。使用说明见 [桌面操作指南](../docs/guides/Windows_相机控制台操作指南.md)。免安装 ZIP 在 releases/ 本地生成，不提交 Git。
 
@@ -18,7 +18,7 @@ Windows 中文桌面客户端：PySide6 界面、Paramiko SSH/SFTP、独立 FFmp
 | `evm_console/playback.py` | 本地 MP4 回放窗口 |
 | `evm_console/widgets.py` | 样式、状态卡片、画面绘制 |
 
-本轮开发版本为 1.2.0，便携包独立生成于 releases/，不会覆盖旧版目录。修改源码不会自动更新旧 EXE。
+本轮开发版本为 1.2.1，便携包独立生成于 releases/，不会覆盖旧版目录。修改源码不会自动更新旧 EXE。
 
 板端安装路径固定为 `/userdata/av_dev/ffmpeg_pipeline/`；RTSP 读取 `8554/imx415`。默认单板单相机。密码和密钥由用户提供，应用退出不停止板端服务。
 

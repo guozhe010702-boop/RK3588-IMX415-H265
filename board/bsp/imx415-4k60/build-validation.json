@@ -1,19 +1,20 @@
 {
-  "status": "UNVALIDATED_CANDIDATE_NOT_FLASHED",
+  "status": "BOARD_4K60_30MIN_PASSED_PC_LONG_TEST_DEFERRED",
   "originalBootSha256": "7cf5378f68e374aec8d2fe8b01e8ba4e8e36863a8b71f61ba670c5f6dc3bca7f",
-  "candidateBootSha256": "a69c73b9e7415f1bb80c923f65a53fc3abb009b664890778eda5f9704d8e2e72",
+  "candidateBootSha256": "9c35ccb2a09535277340fe81ad351d624f346b67bb9a96f577bfa1a6329f66b0",
   "bytes": 50827264,
   "partitionBytes": 67108864,
   "kernelSha256": "edf63ba908f885c6e7c9cd7046629b489a026678bfa6a8cb60ff8e4c283625ec",
-  "dtbSha256": "f88778be75911426df9700e23cbde2e2f2dc5ed9d1f8f5a83e4681a309d482c0",
+  "dtbSha256": "57abfe6b480b7d924961615e5fb612ed047c4ec5f6021d4b4b218ad985e1e2eb",
   "realCamera4k60Validated": false,
   "unchangedPayloads": [
-    "ramdisk",
-    "resource"
+    "ramdisk"
   ],
   "sensorPath": "/i2c@feaa0000/imx415@36",
-  "systemSwitchApproved": false,
-  "recoveryBootTested": false,
+  "systemSwitchApproved": true,
+  "systemSwitchApprovalDate": "2026-10-19",
+  "systemSwitchApprovalScope": "Only boot; full readback verification, reboot, restore original on failure",
+  "recoveryBootTested": true,
   "kernelObjectCompiled": true,
   "kernelImageBuilt": true,
   "bootFitPackaged": true,
@@ -35,5 +36,140 @@
   "bootPartitionLabel": "boot",
   "originalBackupVerifiedOnPC": true,
   "liveSensorClockHz": 37125000,
-  "bootTested": false
+  "bootTested": true,
+  "recoveryReadOnlyRehearsalPassed": true,
+  "recoveryColdMaskromPassed": true,
+  "recoveryRestoreWriteTested": true,
+  "recoveryRehearsalDate": "2026-10-19",
+  "recoveryNote": "SW2 cold Maskrom/RAM Loader/eMMC/GPT/return passed. Linux boot-only rollback also tested; Maskrom partition restoration write not tested.",
+  "resourceDtbEntry": "evm3588#_saradc_ch5=3754.dtb",
+  "packagingRevision": 2,
+  "resourceSha256": "e3707ac919e824844056d5e0a316bf0d9e6ab634213d8a73a67b4b42690443bc",
+  "partitionImageSha256": "102a8af58b9bc0b6a5d542db4c41ca99b2dc0f4586776b67e78332836c1147c9",
+  "recoveryRestoreWriteMethod": "Linux boot-only restore; full SHA-256 readback and original-kernel reboot verified",
+  "maskromRestoreWriteTested": false,
+  "sensorReportedFps": 60.0,
+  "directCaptureTest": {
+    "frames": 180,
+    "fps": 59.99
+  },
+  "cameraShortTest": {
+    "capture_fps": 60.02209015494709,
+    "encode_fps": 60.001674202119865,
+    "board_decode_fps": 59.986554772062206,
+    "pc_decode_fps": 59.98338569752421,
+    "qt_paint_fps": 59.787307266151664,
+    "rtsp_mbps": 20.228411285425864,
+    "pc_session_mbps": 20.234525309652806,
+    "nic_tx_mbps": null,
+    "gui_rss_mib": 151.8063725490196,
+    "pc_decoder_rss_mib": 118.15716911764706
+  },
+  "firstPackagingTrial": {
+    "partitionSha256": "295aa13f8802cd9a63efe3fb20263242daf24f32725427e42de6e1c9b3490abc",
+    "kernelBooted": true,
+    "experimentalDtActive": false,
+    "sensorReportedFps": 30,
+    "reason": "U-Boot selects B1 DTB from resource; initial candidate patched only FIT primary DTB",
+    "originalBootRestoredAndRebooted": true
+  },
+  "changedPayloads": [
+    "kernel",
+    "fdt",
+    "resource:evm3588#_saradc_ch5=3754.dtb"
+  ],
+  "preservedResources": [
+    "rk-kernel.dtb",
+    "evm3588#_saradc_ch5=2048.dtb",
+    "logo_kernel.bmp",
+    "logo.bmp"
+  ],
+  "originalUbootSha256": "7afde1f520b04124370c3dc7a4729a615f6ff85e4f1ff36ad63ac2a50877f84a",
+  "currentUbootUnchanged": true,
+  "realCamera4k60CaptureValidated": true,
+  "boardPipeline4k60Validated": true,
+  "fullChain4k60Validated": false,
+  "fullChainPendingReason": "PC 30-minute decode/Qt acceptance deferred by user; one additional capture sequence gap observed",
+  "boardAcceptance": {
+    "scope": "REAL_CAMERA_4K60_LAN_WITH_HDMI",
+    "requestedSeconds": 1800,
+    "completed": true,
+    "durationSeconds": 1800.3910000000033,
+    "samples": 1798,
+    "captureFps": 59.994230841863306,
+    "encoderFps": 59.9906617810029,
+    "boardDecodeFps": 59.99399592302876,
+    "additionalSequenceGaps": 1,
+    "captureErrors": 0,
+    "duplicateFrames": 0,
+    "droppedFrames": 0,
+    "maxTemperatureC": 59.153,
+    "averageRtspMbps": 20.243161146377844,
+    "averageHostCpuPercent": 44.108165887340235,
+    "encoderRssMiBFirstLast": [
+      155.54296875,
+      155.54296875
+    ],
+    "decoderRssMiBFirstLast": [
+      91.08984375,
+      102.953125
+    ]
+  },
+  "pcShortAcceptance": {
+    "seconds": 60,
+    "scope": "REAL_CAMERA_LAN_DECODE_AND_VISIBLE_QT",
+    "averages": {
+      "capture_fps": 60.000708622574614,
+      "encode_fps": 60.02206456929962,
+      "board_decode_fps": 59.98139054540603,
+      "pc_decode_fps": 59.96368333273466,
+      "qt_paint_fps": 58.40427446573787,
+      "rtsp_mbps": 20.22767366135015,
+      "pc_session_mbps": 20.23687413431403,
+      "nic_tx_mbps": 40.85598612073926,
+      "gui_rss_mib": 151.48609375,
+      "pc_decoder_rss_mib": 189.11625
+    },
+    "firstFrameSeconds": 1.375,
+    "reconnects": 0,
+    "pcDecodeErrorsAfterWarmup": 0
+  },
+  "pcLongAcceptance": {
+    "completed": false,
+    "deferredByUser": true,
+    "partialSeconds": 941.9839999999967,
+    "partialSoftwareDecodeFps": 59.9919387343813
+  },
+  "recordingFrames": {
+    "frames": 739,
+    "uniqueImages": 739,
+    "consecutiveDuplicateImages": 0,
+    "nonIncreasingPts": 0,
+    "ptsGaps": 0,
+    "timebase": "1/60",
+    "scope": "Actual downloaded H.265 camera MP4, full source decode then 160x90 gray frame hash"
+  },
+  "automatedTests": {
+    "passed": 65,
+    "subtestsPassed": 18
+  },
+  "portableSmoke": {
+    "exitCode": 0,
+    "visibleWindow": true,
+    "chinesePath": true,
+    "noPythonOnPath": true,
+    "scaleFactor": 1.5,
+    "currentCsvSchema": true,
+    "leftoverChildPids": [],
+    "binaryMatchesRelease": true
+  },
+  "finalConfiguration": {
+    "codec": "h265",
+    "width": 3840,
+    "height": 2160,
+    "fps": 60,
+    "bitrate": 20000000,
+    "gop": 60
+  },
+  "servicesEnabledAtBoot": false
 }

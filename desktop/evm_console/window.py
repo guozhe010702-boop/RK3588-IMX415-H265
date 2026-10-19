@@ -9,7 +9,7 @@ from pathlib import Path
 import time
 import shutil
 import keyring
-from PySide6.QtCore import Qt, QTimer, QUrl
+from PySide6.QtCore import Qt, QTimer, QUrl, QEvent
 from PySide6.QtGui import QDesktopServices, QPixmap, QGuiApplication
 from PySide6.QtWidgets import (
     QMainWindow,
@@ -30,6 +30,7 @@ from .core import (
     PREVIEW_PRESETS,
     save_preview_quality,
     PERFORMANCE_CONFIG,
+    four_k60_note,
 )
 from .ssh import SSHWorker, trust_host
 from .video import VideoWorker
@@ -298,7 +299,7 @@ class MainWindow(QMainWindow):
         self.bitrate.setValue(c['bitrate'] / 1e6)
         self.gop.setValue(c['gop'])
         self.preview_quality.setCurrentText('性能 60 fps')
-        self.message.setText('已填入 4K60；当前驱动待适配。可用 4K30 验证指标，不能当作 4K60 验收。')
+        self.message.setText('已填入 4K60 性能预设，尚未应用。\n' + four_k60_note(getattr(self, 'camera_capabilities', {})))
 
     def on_status(self, status):
         if self.closing or not self.want_board:
@@ -362,10 +363,11 @@ class MainWindow(QMainWindow):
             return
         result = response.get("result", {})
         if action == "check":
+            self.camera_capabilities = result
             item = self.codec.model().item(1)
             item.setEnabled("h264_rkmpp" in result.get("encoders", []))
             self.add_log("系统", "板端硬编能力：" + ", ".join(result.get("encoders", [])))
-            self.capability_note.setText('4K60：待驱动适配（未通过真实采集验收）\n传感器当前报告：' + str(result.get('sensorFramesPerSecond', '不可用')) + ' fps')
+            self.capability_note.setText(four_k60_note(result))
             self.fps.setMaximum(60)
         elif action == "snapshot":
             self.files.submit("download", (result["file"], self.download_path.text()))
@@ -646,6 +648,11 @@ class MainWindow(QMainWindow):
         from PySide6.QtWidgets import QApplication
 
         QApplication.clipboard().setText(self.log_view.toPlainText())
+
+    def changeEvent(self, event):
+        super().changeEvent(event)
+        if event.type() == QEvent.Type.WindowStateChange and hasattr(self, 'performance'):
+            self.performance.set_window_minimized(self.isMinimized())
 
     def closeEvent(self, event):
         if not self.closing:

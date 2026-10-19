@@ -30,7 +30,7 @@ class Rates:
 COLUMNS = ('time', 'board_stale', 'board_age_s', 'capture_fps', 'capture_gaps',
            'capture_errors', 'sensor_fps', 'encode_fps', 'encode_frames', 'encode_drops',
            'encode_duplicates', 'board_decoder_name', 'board_decoder_vpu_open', 'board_decode_fps', 'board_decode_size', 'board_decode_running', 'board_decode_error', 'hdmi_size', 'monitor_mode',
-           'pc_decode_fps', 'pc_decode_size', 'qt_paint_fps', 'preview_size',
+           'pc_decode_fps', 'pc_decode_size', 'qt_paint_fps', 'window_minimized', 'preview_size',
            'preview_discarded', 'pc_decode_errors', 'reconnects', 'first_frame_s', 'video_age_s', 'target_mbps',
            'rtsp_mbps', 'pc_session_mbps', 'nic_name', 'nic_tx_mbps', 'nic_rx_mbps', 'link_mbps',
            'nic_tx_percent', 'nic_rx_percent', 'board_cpu_percent', 'board_encoder_cpu_percent',
@@ -43,7 +43,8 @@ def size_text(value):
     return 'x'.join(map(str, value)) if value else None
 
 
-def flatten(board, video, local, rates, now, painted, paint_identity, received_at, connected):
+def flatten(board, video, local, rates, now, painted, paint_identity, received_at, connected,
+            window_minimized=False):
     m = board.get('metrics') or {}
     board_age = max(0, now - received_at) + (m.get('ageSeconds') or 0) if m and received_at else None
     stale = not connected or not m or bool(m.get('stale')) or board_age is None or board_age > 3
@@ -77,7 +78,8 @@ def flatten(board, video, local, rates, now, painted, paint_identity, received_a
         hdmi_size=size_text(decoder.get('displaySize')),
         monitor_mode=('{}x{}@{}Hz'.format(monitor['width'], monitor['height'], monitor['refreshHz']) if monitor else None),
         pc_decode_fps=decoded, pc_decode_size=size_text(video.get('inputSize')),
-        qt_paint_fps=painted_fps, preview_size=size_text(video.get('previewSize')),
+        qt_paint_fps=painted_fps, window_minimized=window_minimized,
+        preview_size=size_text(video.get('previewSize')),
         preview_discarded=video['discarded'], reconnects=video['reconnects'],
         pc_decode_errors=video.get('decodeErrors'),
         first_frame_s=video.get('firstFrameSeconds'), video_age_s=video_age,
@@ -95,6 +97,7 @@ def flatten(board, video, local, rates, now, painted, paint_identity, received_a
         result['board_' + name + '_rss_mib'] = rss / 1024**2 if rss is not None else None
     result.update(local)
     result['bottleneck'] = ('板端指标已过期' if stale else
+        '窗口已最小化：未进行可见绘制，板端任务继续' if window_minimized else
         '视频未出帧或已停滞' if not decoding else
         '60 fps 预览绘制不足 55 fps（请结合趋势判断）' if min(video.get('maximumFps', 30),
             video.get('sourceFps') or config.get('fps', 0)) >= 59
@@ -111,6 +114,7 @@ class PerformanceWorker(QThread):
         self.video, self.canvas = video, canvas
         self.lock = threading.Lock()
         self.board, self.received_at, self.connected = {}, 0, False
+        self.window_minimized = False
         self.stop_event = threading.Event()
         self.folder = data_root() / 'performance'
         self.csv_path = None
@@ -125,6 +129,10 @@ class PerformanceWorker(QThread):
     def set_connected(self, connected):
         with self.lock:
             self.connected = connected
+
+    def set_window_minimized(self, minimized):
+        with self.lock:
+            self.window_minimized = bool(minimized)
 
     def set_folder(self, folder):
         with self.lock:
@@ -157,6 +165,7 @@ class PerformanceWorker(QThread):
                 try:
                     with self.lock:
                         board, received, connected, folder = self.board, self.received_at, self.connected, self.folder
+                        minimized = self.window_minimized
                     video = self.video.metrics_snapshot()
                     video['discarded'] += self.canvas.discarded_frames
                     gui_cpu, gui_rss = self.resources(os.getpid())
@@ -166,7 +175,7 @@ class PerformanceWorker(QThread):
                     local = dict(pc_cpu_percent=psutil.cpu_percent(), gui_cpu_percent=gui_cpu,
                         gui_rss_mib=gui_rss, pc_decoder_cpu_percent=dec_cpu, pc_decoder_rss_mib=dec_rss)
                     row = flatten(board, video, local, self.rates, start, self.canvas.painted_frames,
-                                  video['generation'], received, connected)
+                                  video['generation'], received, connected, minimized)
                     if current_folder != folder:
                         retry_at = 0
                     if (file is None or current_folder != folder) and start >= retry_at:

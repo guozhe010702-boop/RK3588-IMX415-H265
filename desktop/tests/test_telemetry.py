@@ -117,3 +117,17 @@ def test_30fps_source_with_60fps_preview_is_not_a_55fps_bottleneck():
     flatten(board, v, {}, rates, 10, 30, 1, 10, True)
     row = flatten(board, v, {}, rates, 11, 60, 1, 11, True)
     assert row['qt_paint_fps'] == 30 and row['bottleneck'] == ''
+
+
+def test_minimized_paint_zero_is_not_a_camera_performance_failure():
+    v = video()
+    v['sourceFps'] = 60
+    rates = Rates()
+    board = {'config': PERFORMANCE_CONFIG, 'metrics': {'stale': False, 'ageSeconds': 0}}
+    flatten(board, v, {}, rates, 10, 30, 1, 10, True, True)
+    v['decodedFrames'] += 60
+    v['lastFrame'] = 11
+    row = flatten(board, v, {}, rates, 11, 30, 1, 11, True, True)
+    assert row['qt_paint_fps'] == 0
+    assert row['window_minimized'] and '窗口已最小化' in row['bottleneck']
+    assert '不足 55' not in row['bottleneck']

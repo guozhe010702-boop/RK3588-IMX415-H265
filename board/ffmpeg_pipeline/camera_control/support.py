@@ -8,7 +8,8 @@ import subprocess
 import uuid
 import json
 import os
-from .config import ControlError
+from .config import ControlError, ROOT
+from .validation import read_acceptance
 
 
 def stamp():
@@ -92,4 +93,7 @@ def camera_capabilities(device):
             result['discoveryError'] = query.stderr[-1000:]
     except (OSError, subprocess.TimeoutExpired) as error:
         result['discoveryError'] = str(error)
+    mode_available = any(m['fps'] >= 59 and m['sensorWidth'] >= 3840 and m['sensorHeight'] >= 2160
+                         for m in result['modes'])
+    result['fourK60'] = read_acceptance(ROOT / 'state/camera-validation.json', device, mode_available)
     return result

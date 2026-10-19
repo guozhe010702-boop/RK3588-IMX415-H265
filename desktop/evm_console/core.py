@@ -32,6 +32,18 @@ DEFAULT_CONFIG = {
 }
 
 
+def four_k60_note(capabilities):
+    """Keep a reported sensor mode separate from measured full-path acceptance."""
+    mode = capabilities.get('cameraCapabilities', {}).get('fourK60', {})
+    if mode.get('verified') is True:
+        title = '4K60：本机 30 分钟全链路验收通过'
+    elif mode.get('state') == 'mode-available-unvalidated':
+        title = '4K60：驱动模式已可用，完整验收尚未通过'
+    else:
+        title = '4K60：待驱动适配（未通过真实采集验收）'
+    return title + '\n传感器当前报告：' + str(capabilities.get('sensorFramesPerSecond', '不可用')) + ' fps'
+
+
 def data_root():
     path = Path(
         os.environ.get(

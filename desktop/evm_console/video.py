@@ -15,6 +15,15 @@ def preview_size(width, height, maximum):
     return output_width, max(2, int(height * output_width / width) // 2 * 2)
 
 
+def rtsp_decoder_options(maximum_fps):
+    # AV_CODEC_FLAG_LOW_DELAY disables FF_THREAD_FRAME (FFmpeg pthread.c).
+    # Keep a bounded four-frame decoder for 4K60 throughput instead of forcing
+    # slice-only decoding; RGB delivery still uses the existing latest mailbox.
+    if maximum_fps >= 60:
+        return ['-threads', '4', '-thread_type', 'frame+slice']
+    return ['-flags', 'low_delay', '-threads', '2']
+
+
 def terminate(process):
     if process is not None:
         try:
@@ -114,11 +123,8 @@ class VideoWorker(QThread):
                         "tcp",
                         "-fflags",
                         "nobuffer",
-                        "-flags",
-                        "low_delay",
-                        "-threads",
-                        "0" if fps >= 60 else "2",
                     ]
+                    args += rtsp_decoder_options(fps)
                 else:
                     args += ["-stream_loop", "-1", "-re", "-threads", "2"]
                 filters = (

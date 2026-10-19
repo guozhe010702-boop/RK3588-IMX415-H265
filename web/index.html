@@ -248,13 +248,13 @@ footer .mono{color:#b9c7d5;font-size:12px}
     <div class="hero-actions">
       <a class="action primary" href="../docs/architecture/项目程序逻辑与目录导航.md">先看程序逻辑与目录 →</a>
       <a class="action" href="../docs/guides/Windows_相机控制台操作指南.md">使用 Windows 桌面控制台 →</a>
-      <a class="action" href="../releases/EVM3588CameraConsole-Windows-x64-v1.2.0.zip" download>下载本地 1.2.0 EXE</a>
+      <a class="action" href="../releases/EVM3588CameraConsole-Windows-x64-v1.2.1.zip" download>下载本地 1.2.1 EXE</a>
       <a class="action" href="#start">查看解压与部署</a>
       <a class="action" href="../releases/av_dev-source.zip" download>下载本地代码包</a>
       <a class="action" href="../README.md">查看 README</a>
     </div>
     <div class="hero-stats">
-      <div class="hstat"><div class="n">4K<span class="u">@30</span></div><div class="l">目标规格 · 板端吞吐待实测</div></div>
+      <div class="hstat"><div class="n">4K<span class="u">@60</span></div><div class="l">实验模式 · 板端 30 分钟实测</div></div>
       <div class="hstat"><div class="n">H.265</div><div class="l">当前主链路 · MPP 硬件编码</div></div>
       <div class="hstat"><div class="n">2<span class="u">端</span></div><div class="l">板端 VPU 硬解 + 电脑 Qt</div></div>
       <div class="hstat"><div class="n">dma-buf</div><div class="l">进阶方向 · 当前 C 示例使用拷贝</div></div>
@@ -271,7 +271,7 @@ footer .mono{color:#b9c7d5;font-size:12px}
   </div>
 </div>
 
-<div class="note info"><b>性能监测 1.2.0：</b>Qt 内查看采集、硬编、板端硬解、电脑解码与实际绘制帧率、订阅带宽和 CSV。真实相机当前支持 4K30；4K60 仍待实验内核切换与实测。<a href="../docs/guides/4K60与性能监测.md">操作与统计口径</a></div>
+<div class="note info"><b>性能监测 1.2.1：</b>真实相机板端 30 分钟：采集/编码/硬解约 59.99 fps，新增 1 个驱动序号缺口。电脑端前台一分钟约 59.96 fps 解码、58.40 fps 绘制；电脑完整长测按用户安排后续进行。<a href="../docs/history/4K60与性能监测验收.md">完整实测与边界</a>、<a href="../docs/guides/4K60与性能监测.md">操作与指标口径</a>。</div>
 <!-- ===== 当前板端状态与主链路 ===== -->
 <section id="runtime">
   <div class="wrap">
@@ -309,7 +309,7 @@ python3 /userdata/av_dev/ffmpeg_pipeline/avctl.py preview-start</pre></div>
     </div>
     <div class="codewrap"><div class="codebar"><span class="fn">电脑 PowerShell · RTSP 实时播放</span><button class="copy" type="button">复制</button></div><pre>ffplay -rtsp_transport tcp -fflags nobuffer -flags low_delay -framedrop rtsp://192.168.2.221:8554/imx415</pre></div>
     <p class="muted"><code>ffplay</code> 播放视频；<code>-rtsp_transport tcp</code> 用 TCP 传输，<code>-fflags nobuffer</code> 减少输入缓存，<code>-flags low_delay</code> 请求低延迟解码，<code>-framedrop</code> 在显示落后时丢弃显示帧。地址是板端 IP、8554 端口和 <code>/imx415</code> 路径。加入时可能需要等待下一个关键帧。若板子 IP 变化，板端 <code>hostname -I</code> 可查询新地址。</p>
-    <div class="note ok"><b>项目源码已梳理：</b><a href="../docs/architecture/项目程序逻辑与目录导航.md">程序逻辑与目录导航</a> · <a href="../docs/history/项目结构整理记录.md">本轮整理与验证</a> · 桌面软件 1.2.0：<a href="../docs/architecture/Windows_控制台优化调研与实施.md">优化调研与改进</a> · <a href="../docs/guides/Windows_相机控制台操作指南.md">Windows 中文控制台使用说明</a> · <a href="../docs/history/Windows_相机控制台验收记录.md">桌面实际验收</a> · <a href="../docs/guides/FFmpeg_全链路操作指南.md">底层 FFmpeg 操作指南</a>。通过 SSH 控制、RTSP 实时预览、H.264/H.265 参数、HDMI、截图、MP4 与 SFTP 下载；无需每次手输命令。EXE 压缩包在本地交付，下载按钮读取 releases/ 中的本地交付文件。</div>
+    <div class="note ok"><b>项目源码已梳理：</b><a href="../docs/architecture/项目程序逻辑与目录导航.md">程序逻辑与目录导航</a> · <a href="../docs/history/项目结构整理记录.md">本轮整理与验证</a> · 桌面软件 1.2.1：<a href="../docs/architecture/Windows_控制台优化调研与实施.md">优化调研与改进</a> · <a href="../docs/guides/Windows_相机控制台操作指南.md">Windows 中文控制台使用说明</a> · <a href="../docs/history/Windows_相机控制台验收记录.md">桌面实际验收</a> · <a href="../docs/guides/FFmpeg_全链路操作指南.md">底层 FFmpeg 操作指南</a>。通过 SSH 控制、RTSP 实时预览、H.264/H.265 参数、HDMI、截图、MP4 与 SFTP 下载；无需每次手输命令。EXE 压缩包在本地交付，下载按钮读取 releases/ 中的本地交付文件。</div>
   </div>
 </section>
 
@@ -326,7 +326,7 @@ python3 /userdata/av_dev/ffmpeg_pipeline/avctl.py preview-start</pre></div>
       <span class="tag t-green">IMX415 已接 con7（用户确认）</span>
       <span class="tag t-cyan">新增 07 H.265 双端预览脚本</span>
       <span class="tag t-green">NV12 采集、H.265 TCP 管线已验证</span>
-      <span class="tag t-violet">文档更新：2026-10-16</span>
+      <span class="tag t-violet">文档更新：2026-10-19</span>
     </div>
     <div class="note info"><b>当前主链路：</b>IMX415/con7 → 双平面 NV12M → 独立 FFmpeg → RK3588 VPU H.265 → MediaMTX RTSP 8554；HDMI、电脑和按需 MP4 录像均订阅同一条码流。旧 GStreamer/TCP 5000 为保留方案；不应同时打开同一个摄像头节点。</div>
 
@@ -1201,7 +1201,7 @@ ioctl(fd, VIDIOC_QBUF, &b);</pre></div>
       </div>
       <div class="card">
         <h3 class="sub">4K 卡顿 / 掉帧</h3>
-        <p class="muted">开 performance 调速；确认走的是硬编（top 中 CPU 应很低）；缩到 1080p 用 RGA；4K60 官方不保证，按 30fps 设计；必要时上 dma-buf 零拷贝。</p>
+        <p class="muted">先核对传感器报告和实测采集帧率，再分别看编码、解码、缩放及 Qt 绘制。以编码日志和 MPP 设备访问确认硬编；CPU 同时包含图像复制、显示等开销。4K60 使用匹配本板的实验内核，完整验收范围见上方记录；HDMI 按实际 1080p 模式显示。</p>
       </div>
     </div>
     <div class="note info" style="margin-top:20px"><b>当前进度：</b>FFmpeg 直接采集 → VPU H.265 → RTSP → 两端播放、MP4 和截图已跑通；Windows 桌面控制台已实现并打包。界面可看实时视频、控制相机链路并下载录像，网页仍展示带时间的状态快照。镜头到屏幕的端到端延迟待专门测量。</div>

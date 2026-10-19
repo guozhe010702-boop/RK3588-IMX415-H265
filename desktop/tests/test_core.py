@@ -9,6 +9,16 @@ import pytest
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
 from evm_console.core import FrameAssembler,Connection,parse_response,controls,save_preferences
 from evm_console.files import copy_remote,checked_remote
+from evm_console.core import four_k60_note
+
+
+def test_4k60_note_distinguishes_mode_enumeration_and_acceptance():
+    assert '待驱动适配' in four_k60_note({})
+    available = {'sensorFramesPerSecond': 60, 'cameraCapabilities': {'fourK60': {
+        'state': 'mode-available-unvalidated', 'verified': False}}}
+    assert '完整验收尚未通过' in four_k60_note(available)
+    available['cameraCapabilities']['fourK60']['verified'] = True
+    assert '30 分钟全链路验收通过' in four_k60_note(available)
 
 def test_response_validation():
     assert parse_response('{"ok":true,"result":{"state":"running"}}')['result']['state']=='running'
