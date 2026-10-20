@@ -18,6 +18,7 @@ from .config import ROOT, DEFAULTS, URL, MIN_FREE, ControlError, validate_config
 from .support import atomic_json, camera_owners, camera_capabilities, run_id, sensor_frame_rate, stamp, tail
 from .metrics import BoardMetrics
 from .decoder import HardwareDisplay
+from .raw_scheduler import RawScheduler
 
 
 class Controller:
@@ -61,6 +62,7 @@ class Controller:
         )
         self.decoder = HardwareDisplay(self)
         self.telemetry = BoardMetrics(self)
+        self.raw_scheduler = RawScheduler(self.root)
         self.actual_capture = None
 
     def active(self, process):
@@ -172,6 +174,7 @@ class Controller:
                 "previewRunning": self.decoder.snapshot()["running"],
                 "boardDecode": self.decoder.snapshot(),
                 "metrics": self.telemetry.snapshot(),
+                "captureScheduling": self.raw_scheduler.snapshot(),
                 "recording": self.active(self.recorder),
                 "recordingStartedAt": self.record_started,
                 "recordingFile": str(self.record_temp) if self.record_temp else None,
@@ -336,6 +339,7 @@ class Controller:
             self.decoder.stop()
             self.preview = None
             self.capture = None
+            self.raw_scheduler.reconcile(False, self.config)
             self.retry_times = []
         try:
             state = self.launch_ready(requested)
@@ -560,6 +564,7 @@ class Controller:
             self.stop_child(self.capture)
             self.capture = None
             self.capture_stopped_at = time.monotonic()
+            self.raw_scheduler.reconcile(False, self.config)
             self.progress = {}
             self.last_frame_at = 0.0
             return {"state": "stopped", "recordingResult": record_result}
@@ -613,6 +618,7 @@ class Controller:
                             # HDMI failure must never restart or disable the encoder.
                             self.want_preview = False
                             self.decoder.error = str(error)
+                    self.raw_scheduler.reconcile(self.active(self.capture), self.config)
                     atomic_json(self.root / "state/status.json", self.status())
                 except Exception as error:
                     self.last_error = {"at": stamp(), "message": str(error)}

@@ -38,7 +38,9 @@ def main():
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(data, indent=2), encoding="utf-8")
     print(json.dumps({k: v for k, v in data.items() if k not in ("status", "journal", "memory", "cameraProc", "interrupts")}))
-    print(json.dumps({"capture": data["status"]["result"]["metrics"]["capture"]}))
+    state = data.get("status", {}).get("result", {})
+    print(json.dumps({"state": state.get("state"),
+                      "capture": state.get("metrics", {}).get("capture")}))
 
 
 if __name__ == "__main__":
