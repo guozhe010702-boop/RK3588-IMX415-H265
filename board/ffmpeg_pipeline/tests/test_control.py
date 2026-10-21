@@ -13,6 +13,23 @@ from camera_control import controller as avctl
 
 
 class ControlTests(unittest.TestCase):
+    def test_8k60_encode_is_not_confused_with_decoder_limit(self):
+        for codec in ('h264','h265'):
+            with self.subTest(codec=codec), self.assertRaisesRegex(avctl.ControlError,'decoding'):
+                avctl.validate_config({'codec':codec,'width':7680,'height':4320,'fps':60})
+        self.assertEqual(avctl.validate_config({'width':7680,'height':4320,'fps':30})['fps'],30)
+        self.assertEqual(avctl.validate_config({'width':3840,'height':2160,'fps':60})['fps'],60)
+
+    def test_imx415_cannot_be_relabelled_native_8k_before_handover(self):
+        with tempfile.TemporaryDirectory() as directory:
+            controller=avctl.Controller(directory)
+            with patch.object(avctl,'sensor_frame_rate',return_value=60), patch.object(
+                avctl,'camera_capabilities',return_value={'sensorName':'m00_b_imx415 4-001a'}
+            ), patch.object(controller,'stop_child') as stop:
+                with self.assertRaisesRegex(avctl.ControlError,'IMX415'):
+                    controller.start({'width':7680,'height':4320,'fps':30})
+                stop.assert_not_called()
+
     def test_configuration_rejects_unsafe_or_invalid_values(self):
         for value in [
             {"device": "/dev/video44; touch /tmp/x"},

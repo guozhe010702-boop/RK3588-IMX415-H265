@@ -82,6 +82,11 @@ def camera_capabilities(device):
         result['discoveryError'] = 'Sensor mapping unavailable for this capture node'
         return result
     result['sensorSubdevice'] = '/dev/v4l-subdev2'
+    identity = Path('/sys/class/video4linux/v4l-subdev2/name')
+    try:
+        result['sensorName'] = identity.read_text().strip()
+    except OSError:
+        result['sensorName'] = ''
     try:
         query = subprocess.run(['v4l2-ctl', '-d', '/dev/v4l-subdev2', '--list-subdev-frameintervals',
                                 'pad=0,code=0x300e,width=3864,height=2192'],

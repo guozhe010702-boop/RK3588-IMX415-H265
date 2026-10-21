@@ -1,0 +1,49 @@
+# Isolated lab service. Camera publishing is explicit; never replaces port 8554.
+logLevel: info
+rtsp: true
+rtspAddress: :8555
+rtspTransports: [tcp]
+rtmp: false
+hls: false
+webrtc: false
+srt: false
+moq: false
+api: false
+authMethod: internal
+authInternalUsers:
+  - user: any
+    pass:
+    ips: [127.0.0.1, "::1"]
+    permissions:
+      - action: publish
+        path: imx415-upscaled-8k30
+      - action: publish
+        path: lab8k30
+      - action: publish
+        path: lab8k60
+  - user: any
+    pass:
+    ips: []
+    permissions:
+      - action: read
+        path: imx415-upscaled-8k30
+      - action: read
+        path: lab8k30
+      - action: read
+        path: lab8k60
+paths:
+  imx415-upscaled-8k30:
+    source: publisher
+    overridePublisher: false
+    record: false
+  lab8k30:
+    source: publisher
+    overridePublisher: false
+    record: false
+  lab8k60:
+    source: publisher
+    overridePublisher: false
+    record: false
+# Production external 8K60 is a DIFFERENT source, not an IMX415 preset.
+# Configure a source-pull path and matching read permission only after preparing
+# a real 8K60 HEVC encoder. Do not allow anonymous remote publishers by default.

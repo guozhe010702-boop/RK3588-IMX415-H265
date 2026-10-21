@@ -14,7 +14,7 @@ import subprocess
 import threading
 import time
 import urllib.request
-from .config import ROOT, DEFAULTS, URL, MIN_FREE, ControlError, validate_config
+from .config import ROOT, DEFAULTS, URL, MIN_FREE, ControlError, validate_config, codec_capabilities
 from .support import atomic_json, camera_owners, camera_capabilities, run_id, sensor_frame_rate, stamp, tail
 from .metrics import BoardMetrics
 from .decoder import HardwareDisplay
@@ -85,6 +85,7 @@ class Controller:
             ]
         return {
             "ffmpeg": self.ffmpeg,
+            "videoCodecCapabilities": codec_capabilities(),
             "encoders": encoders,
             "vpuDevicePresent": Path("/dev/mpp_service").exists(),
             "sensorFramesPerSecond": sensor_frame_rate(self.config["device"]),
@@ -323,6 +324,10 @@ class Controller:
             if self.active(self.capture) and requested == self.config:
                 return self.status()
             sensor_fps = sensor_frame_rate(requested["device"])
+            if requested['width'] > 3864 or requested['height'] > 2192:
+                discovered = camera_capabilities(requested['device'])
+                if 'imx415' in discovered.get('sensorName', '').lower():
+                    raise ControlError('IMX415 cannot provide native 7680x4320 video (recommended recording size is 3840x2160); use the explicit real-camera 4K-to-8K upscale demo or an actual 8K source')
             if sensor_fps is None and requested['fps'] > 30:
                 raise ControlError('Cannot verify sensor frame rate; high fps request rejected')
             if sensor_fps and requested["fps"] > sensor_fps + 0.01:

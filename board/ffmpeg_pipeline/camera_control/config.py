@@ -15,6 +15,15 @@ DEFAULTS = {
 }
 URL = "rtsp://127.0.0.1:8554/imx415"
 MIN_FREE = 1024**3
+CODEC_SPEC_URL = 'https://www.rock-chips.com/a/en/products/RK35_Series/2022/0926/1660.html'
+
+
+def codec_capabilities():
+    """Specified codec limits, not measured throughput or camera capabilities."""
+    return {'soc': 'RK3588', 'reference': CODEC_SPEC_URL,
+            'eightKSize': [7680, 4320], 'hevcEncodeMaxFpsAt8k': 30,
+            'hevcDecodeMaxFpsAt8k': 60, 'native8k60EncodeSupported': False,
+            'scope': 'SOC_SPECIFICATION_NOT_CAMERA_ACCEPTANCE'}
 ACTIONS = (
     "check",
     "start",
@@ -58,4 +67,6 @@ def validate_config(value):
             raise ControlError("Invalid {} (range {}..{})".format(key, low, high))
     if result["width"] % 2 or result["height"] % 2:
         raise ControlError("NV12 width and height must be even")
+    if result['width'] * result['height'] >= 7680 * 4320 and result['fps'] > 30:
+        raise ControlError('RK3588 8K encoding is limited to 30 fps; 8K60 is a decoding capability')
     return result
