@@ -14,6 +14,7 @@ av_dev/
 │  ├─ bsp/                     独立实验驱动候选，不随普通程序部署
 │  └─ diagnostics/            环境与编码器检查
 ├─ desktop/                   Windows 主程序：main.py、evm_console/、tests/
+├─ rk-yoloworld/              独立 YOLO-World 实时检测：src/、include/、tools/、tests/
 ├─ examples/                  学习代码，与主程序分开
 │  ├─ mpp_c_api/              V4L2 → MPP C API
 │  └─ gstreamer/              原 GStreamer 示例
@@ -40,6 +41,7 @@ av_dev/
 | 阅读核心逻辑和模块职责 | [项目程序逻辑](docs/architecture/项目程序逻辑与目录导航.md) |
 | 修改 Windows 程序 | [desktop](desktop/README.md)，入口 `desktop/main.py` |
 | 修改板端程序 | [FFmpeg 控制服务](board/ffmpeg_pipeline/README.md)，入口 `avctl.py` |
+| 实时目标检测、双端画面与 CPU/NPU 监测 | [YOLO-World 完整操作与源码说明](rk-yoloworld/README.md)，正式源码仅维护在这个子目录 |
 | 使用桌面软件 | [桌面操作指南](docs/guides/Windows_相机控制台操作指南.md) |
 | 部署与命令行操作 | [FFmpeg 指南](docs/guides/FFmpeg_全链路操作指南.md) |
 | 学习 MPP / GStreamer | [examples](examples/README.md) |

@@ -1,0 +1,148 @@
+{
+  "referenceCommit": "5b6995905425115029ad63820a007368d2a2882f",
+  "rga": {
+    "repository": "https://gitee.com/nyanmisaka/rga.git",
+    "commit": "1d330cc28551943bed3380261a5a9c6fbd58ff53",
+    "selectedLibrarySha256": "c9e3e02591d55c1054be3174536343164a34f079bb5244490df321813297db56",
+    "libraryRelease": "2.1.0 (Meson)",
+    "im2dApi": "1.10.4",
+    "packageApi": "1.10.1"
+  },
+  "files": {
+    "vendor/tokenizer/clip_tokenizer.cpp": {
+      "url": "https://raw.githubusercontent.com/zyp0424/-RK3588-yolo-world-/5b6995905425115029ad63820a007368d2a2882f/cpp/tokenizer/clip_tokenizer.cpp",
+      "sha256": "afbddb235352ec284448ca503d38769710001df791b59eaeb6499ddd5f68693a",
+      "bytes": 9651
+    },
+    "vendor/tokenizer/clip_tokenizer.h": {
+      "url": "https://raw.githubusercontent.com/zyp0424/-RK3588-yolo-world-/5b6995905425115029ad63820a007368d2a2882f/cpp/tokenizer/clip_tokenizer.h",
+      "sha256": "ec35057cc5a924633cc94f0a9e026a0ecf33cbfcce542df6dfc42c6a7e67b7b3",
+      "bytes": 1379
+    },
+    "vendor/tokenizer/clip_vocab.h": {
+      "url": "https://raw.githubusercontent.com/zyp0424/-RK3588-yolo-world-/5b6995905425115029ad63820a007368d2a2882f/cpp/tokenizer/clip_vocab.h",
+      "sha256": "dbdf06f5a460cdf530c24244bfb494a8672d7c49b2a6396c54197b16af83fb47",
+      "bytes": 5246321
+    },
+    "vendor/reference/LICENSE": {
+      "url": "https://raw.githubusercontent.com/zyp0424/-RK3588-yolo-world-/5b6995905425115029ad63820a007368d2a2882f/LICENSE",
+      "sha256": "b524ef1fba6f5420d911a2b4cbc8cd9c087306d4a9601a63fd18facb04f08f66",
+      "bytes": 1064
+    },
+    "vendor/reference/cpp-postprocess.cc": {
+      "url": "https://raw.githubusercontent.com/zyp0424/-RK3588-yolo-world-/5b6995905425115029ad63820a007368d2a2882f/cpp/postprocess.cc",
+      "sha256": "df7e01340083ca9cbb2a94e7d975e0d1e472455abe19900052602a246747d18f",
+      "bytes": 14702
+    },
+    "vendor/reference/cpp-realtime_main.cc": {
+      "url": "https://raw.githubusercontent.com/zyp0424/-RK3588-yolo-world-/5b6995905425115029ad63820a007368d2a2882f/cpp/realtime_main.cc",
+      "sha256": "3ceec1464c97e105c624d7da114da2a6f5da629694ad17ec1e83e80947ee2c9d",
+      "bytes": 43792
+    },
+    "vendor/include/rknn_api.h": {
+      "url": "https://raw.githubusercontent.com/airockchip/rknn-toolkit2/v2.3.2/rknpu2/runtime/Linux/librknn_api/include/rknn_api.h",
+      "sha256": "c48e11a6f41b451a5fd1e4ad774ea60252d3d94f78bee9b21ea3d21b21deba9a",
+      "bytes": 35707
+    },
+    "vendor/ffmpeg-7.1.1.tar.xz": {
+      "url": "https://ffmpeg.org/releases/ffmpeg-7.1.1.tar.xz",
+      "sha256": "733984395e0dbbe5c046abda2dc49a5544e7e0e1e2366bba849222ae9e3a03b1",
+      "bytes": 11019500
+    },
+    "vendor/include/rga/im2d.h": {
+      "url": "https://gitee.com/nyanmisaka/rga/blob/1d330cc28551943bed3380261a5a9c6fbd58ff53/im2d_api/im2d.h",
+      "sha256": "5ee06891775451c56e6264f5d53db0a4e948e1830287f3a5db4f75c30ac0ff11",
+      "bytes": 945
+    },
+    "vendor/include/rga/im2d.hpp": {
+      "url": "https://gitee.com/nyanmisaka/rga/blob/1d330cc28551943bed3380261a5a9c6fbd58ff53/im2d_api/im2d.hpp",
+      "sha256": "878d975e8596fa8dbea20dd18b5d1a817b1a258aef3ca924dc42cc174fc6834d",
+      "bytes": 825
+    },
+    "vendor/include/rga/im2d_buffer.h": {
+      "url": "https://gitee.com/nyanmisaka/rga/blob/1d330cc28551943bed3380261a5a9c6fbd58ff53/im2d_api/im2d_buffer.h",
+      "sha256": "17926f09867f300a370f34888fb3d018c2c2b69192a98eeb297facb99bb853a5",
+      "bytes": 7384
+    },
+    "vendor/include/rga/im2d_common.h": {
+      "url": "https://gitee.com/nyanmisaka/rga/blob/1d330cc28551943bed3380261a5a9c6fbd58ff53/im2d_api/im2d_common.h",
+      "sha256": "788a91fc2e67012df8252f6e02c75292a44317131ccd6672f8db1ac851effd19",
+      "bytes": 4735
+    },
+    "vendor/include/rga/im2d_expand.h": {
+      "url": "https://gitee.com/nyanmisaka/rga/blob/1d330cc28551943bed3380261a5a9c6fbd58ff53/im2d_api/im2d_expand.h",
+      "sha256": "5ff151ccccc35eba17019096bf60ac077dd353ff3c8bda0cb90540d0c98c1dc6",
+      "bytes": 1437
+    },
+    "vendor/include/rga/im2d_mpi.h": {
+      "url": "https://gitee.com/nyanmisaka/rga/blob/1d330cc28551943bed3380261a5a9c6fbd58ff53/im2d_api/im2d_mpi.h",
+      "sha256": "820484df831f12f9d44f673bee7f6f180470d828e9233527c9d70ef59d2fe3f7",
+      "bytes": 2666
+    },
+    "vendor/include/rga/im2d_single.h": {
+      "url": "https://gitee.com/nyanmisaka/rga/blob/1d330cc28551943bed3380261a5a9c6fbd58ff53/im2d_api/im2d_single.h",
+      "sha256": "ec7a91db35ce0c1df62550055e192a69ee46d3f940e6dd38594166f999757bc2",
+      "bytes": 33933
+    },
+    "vendor/include/rga/im2d_task.h": {
+      "url": "https://gitee.com/nyanmisaka/rga/blob/1d330cc28551943bed3380261a5a9c6fbd58ff53/im2d_api/im2d_task.h",
+      "sha256": "176feab418ab9abef15917bbb0d678acd680089e0515a86fc5a4417bc9627e38",
+      "bytes": 14710
+    },
+    "vendor/include/rga/im2d_type.h": {
+      "url": "https://gitee.com/nyanmisaka/rga/blob/1d330cc28551943bed3380261a5a9c6fbd58ff53/im2d_api/im2d_type.h",
+      "sha256": "6b434cd076d028c3ca53319376672734a785ff0e850ad386dab0ca802fa92dd3",
+      "bytes": 16018
+    },
+    "vendor/include/rga/im2d_version.h": {
+      "url": "https://gitee.com/nyanmisaka/rga/blob/1d330cc28551943bed3380261a5a9c6fbd58ff53/im2d_api/im2d_version.h",
+      "sha256": "e63bb58c3bec2707b910fe4a473ca70d7cc2b312f143afa68a06a80ea6895775",
+      "bytes": 1683
+    },
+    "vendor/include/rga/drmrga.h": {
+      "url": "https://gitee.com/nyanmisaka/rga/blob/1d330cc28551943bed3380261a5a9c6fbd58ff53/include/drmrga.h",
+      "sha256": "4557e41a75875a6fd4b86290d2d9b16f0128204f12b0cfcdb585cb496f16aac1",
+      "bytes": 9624
+    },
+    "vendor/include/rga/GrallocOps.h": {
+      "url": "https://gitee.com/nyanmisaka/rga/blob/1d330cc28551943bed3380261a5a9c6fbd58ff53/include/GrallocOps.h",
+      "sha256": "70feefbaa2022238b20d5919d7236c228640d598ca27e923ae4ca81cb8dd8e6c",
+      "bytes": 1680
+    },
+    "vendor/include/rga/platform_gralloc4.h": {
+      "url": "https://gitee.com/nyanmisaka/rga/blob/1d330cc28551943bed3380261a5a9c6fbd58ff53/include/platform_gralloc4.h",
+      "sha256": "30f3d3bdb7daf3059a35a61bf826802ed5c25c17ce076424949ecc93716071a8",
+      "bytes": 3956
+    },
+    "vendor/include/rga/rga.h": {
+      "url": "https://gitee.com/nyanmisaka/rga/blob/1d330cc28551943bed3380261a5a9c6fbd58ff53/include/rga.h",
+      "sha256": "f50214c9196cfdb1a66301d71d53cd335ed4bc8b8cdf5a56fdcce5965db2c6b9",
+      "bytes": 10077
+    },
+    "vendor/include/rga/RgaApi.h": {
+      "url": "https://gitee.com/nyanmisaka/rga/blob/1d330cc28551943bed3380261a5a9c6fbd58ff53/include/RgaApi.h",
+      "sha256": "7ea47002d2aa6d5558eceb6c76b95d5e3bb42c249a2c9156af4f4f54502485d0",
+      "bytes": 2353
+    },
+    "vendor/include/rga/RgaMutex.h": {
+      "url": "https://gitee.com/nyanmisaka/rga/blob/1d330cc28551943bed3380261a5a9c6fbd58ff53/include/RgaMutex.h",
+      "sha256": "b40e7b67aaf96d81dc26ff1a9bfdd3bf1b11a7569286303e7c369c8fd74a6d75",
+      "bytes": 6213
+    },
+    "vendor/include/rga/RgaSingleton.h": {
+      "url": "https://gitee.com/nyanmisaka/rga/blob/1d330cc28551943bed3380261a5a9c6fbd58ff53/include/RgaSingleton.h",
+      "sha256": "27f65fcf1472baf08683707bc7a75dbbba85d37cc347b6fd24535f5e194f8325",
+      "bytes": 1882
+    },
+    "vendor/include/rga/RgaUtils.h": {
+      "url": "https://gitee.com/nyanmisaka/rga/blob/1d330cc28551943bed3380261a5a9c6fbd58ff53/include/RgaUtils.h",
+      "sha256": "4537e1e7840e192f75b8678599b6217421f56fea58199af602ab137241f4536d",
+      "bytes": 1230
+    },
+    "vendor/include/rga/RockchipRga.h": {
+      "url": "https://gitee.com/nyanmisaka/rga/blob/1d330cc28551943bed3380261a5a9c6fbd58ff53/include/RockchipRga.h",
+      "sha256": "cc386291fb0585006917094f153923a23963d9c810dc8100bc96d9a91b0436bf",
+      "bytes": 3477
+    }
+  }
+}
