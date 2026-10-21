@@ -72,7 +72,9 @@ def find_capture():
                 return pid, file.parent
         except (OSError, ValueError):
             pass
-    raise RuntimeError("No matching live IMX415 8K30 lab encoder; start it first")
+    raise RuntimeError(
+        "No matching live IMX415 8K30 lab encoder; run: python3 tests/start_8k_hdmi.py (starts encoding and HDMI together)"
+    )
 
 
 def capture_progress(folder):

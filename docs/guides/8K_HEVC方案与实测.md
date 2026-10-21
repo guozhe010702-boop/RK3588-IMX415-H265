@@ -40,6 +40,7 @@ A 是实时相机画面，但 **4K 放大不是原生 8K 拍摄**。B 的每帧�
 | `board/ffmpeg_pipeline/profiles/8k/mediamtx.yml` | 独立 8555 端口配置；实拍路径为 `imx415-upscaled-8k30`，仅本机允许发布，局域网可读取；不占原 8554 端口 |
 | `board/ffmpeg_pipeline/tests/test_imx415_8k.py` | 新实拍路线的自动测试：采集源、真实选帧、禁止低帧率冒充 60 fps、转换参数及来源拒绝 |
 | `board/ffmpeg_pipeline/tests/hdmi_8k.py` | 给已运行的实拍 8K30 直播增加板端 VPU 硬解→RGA→HDMI 支路；不打开摄像头，保存每秒性能 CSV 和状态 |
+| `board/ffmpeg_pipeline/tests/start_8k_hdmi.py` | 板端一键完整启动：无编码源时自动启动实拍编码和 RTSP，再启动 HDMI；退出时只清理自己创建的源，已有源复用并保留 |
 | `tools/tests/hdmi_imx415_8k.py` | 电脑通过 ADB 单独启动、查询、停止 HDMI 支路，下载其日志与 CSV；不重启编码器 |
 | `board/ffmpeg_pipeline/tests/test_hdmi_8k.py` | 验证完整 8K 硬解、先 RGA 缩放再下载、带时间戳管道、输入尺寸报告与原控制接口兼容 |
 | `board/ffmpeg_pipeline/tests/codec_8k.py` | **上一轮**合成素材的独立 VPU 基准入口；本轮实拍入口不调用它 |
@@ -185,6 +186,32 @@ python .\tools\tests\run_imx415_8k.py --mode decode60 --input "$prepared8k\camer
 
 ## 9. 实拍 8K30 硬编＋板端硬解 HDMI
 
+**想直接在板端打开相机画面，优先使用一键入口，不必手动准备编码源。** 在开发板 Linux 终端执行：
+
+```bash
+cd /userdata/av_dev/ffmpeg_pipeline
+```
+
+解释：进入已部署的板端程序目录；这不是 Windows PowerShell 命令。
+
+```bash
+python3 tests/start_8k_hdmi.py
+```
+
+解释：没有匹配的编码源时，自动启动 IMX415 实拍 4K→RGA 放大至 8K30→VPU H.265 编码→RTSP，然后启动板端完整 8K 硬解→RGA 缩放→HDMI。默认持续运行、不录制 MP4，不需要电脑预览或第二个终端。日志自动保存到带时间和随机后缀的 `lab8k-camera/standalone-.../`；无需自己输入日期表达式或 `--output`。
+
+保持终端打开。按 Ctrl+C，或在 HDMI 窗口按 Esc/Q，结束本次显示；如果编码源由本命令新建，也会正常停止该源。如果复用了已有 8K 源，则保留已有源。未知摄像头占用不会被强行终止。
+
+如果原 `avctl` 控制服务正在直播，且你明确要临时切换到这次 8K 实验，在同一板端目录执行：
+
+```bash
+python3 tests/start_8k_hdmi.py --handover
+```
+
+解释：`--handover` 允许已有控制服务临时停止它管理的旧直播，结束后由源程序恢复旧配置及原 HDMI 状态；它不授权结束未知占用者，录像中仍拒绝切换。
+
+**错误 `No matching live IMX415 8K30 lab encoder` 的含义：** `hdmi_8k.py` 是只解码、不启动编码的低层入口。源未运行时，重复该命令不会解决问题；改用上面的 `start_8k_hdmi.py` 即可完整启动。
+
 这条支路已接到当前实拍直播，不再读取 `/dev/video44`。完整流程为：
 
 ```text
@@ -236,3 +263,5 @@ python3 tests/hdmi_8k.py --output "lab8k-camera/hdmi-$(date +%Y%m%d-%H%M%S)"
 2026-10-21 本轮首次并行观察超过 5 分钟：稳定统计区间约 318 秒，编码约 **29.91 fps**、板端解码输出约 **29.73 fps**；两进程全程观察到 MPP 设备访问，解码错误记录为空，最高温度约 **55.5°C**，板端整体内存约 **48.3%**。完整输入为 7680×4320，HDMI 输出为 1920×1080。电脑核显预览同时保留。
 
 这是功能导通与短测，**不是零丢帧或 30 分钟稳定性验收**。HDMI 播放器在约 381 秒时累计丢弃约 1739 个显示帧，输入视频队列约 3～9 MiB；解码输出接近 30 fps不代表屏幕逐帧显示了 30 fps。保留这些数据，后续可针对显示端优化。`M-V` 只是播放器时钟差，不是精确镜头到屏幕延迟；本次也没有消除已有相机源的全部序号缺口。
+
+一键入口的冷启动/清理测试：确认编码、RTSP、播放器均未运行后，以限时模式启动，自动建立源及 HDMI；HDMI 解码 359 帧，停止后源与 HDMI worker 均正常返回，源记录 `restored=true`。源稳定输出约 29.97 fps；这是约 16 秒的生命周期测试，不是画质或零丢帧验收，采集统计保留了启动序号跳变及稳定区间新增 7 个缺口。原始记录只保留本机 `.cache/start-8k-hdmi-test.json`，没有合成输入。

@@ -8,6 +8,8 @@
 
 板端实拍 8K30 硬解/HDMI 支路为 `tests/hdmi_8k.py`，复用 `camera_control/decoder.py` 的 VPU/RGA 实现，使用带时间戳 NUT 管道显示 1080p。电脑通过 `tools/tests/hdmi_imx415_8k.py` 单独启停、查询和下载性能 CSV；该支路不重新打开摄像头、不重启编码器。操作与实际显示丢帧边界见 8K 指南第 9 节。
 
+板端完整启动入口是 `tests/start_8k_hdmi.py`：按需调用现有实拍源和 HDMI 程序，不重复实现编解码。无源时自动启动源，已有源时复用；退出只停止自己创建的源。直接运行 `tests/hdmi_8k.py` 仍要求编码源已经运行。
+
 | 文件 | 责任 | 不负责的内容 |
 | --- | --- | --- |
 | [avctl.py](avctl.py) | 启动命令行入口 | 不保存直播状态，不自行启动第二个采集器 |
