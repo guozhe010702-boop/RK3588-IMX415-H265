@@ -1,6 +1,7 @@
 """Private FFmpeg VPU decode -> RGA -> raw NV12 -> system ffplay HDMI."""
 
 import os
+import json
 from pathlib import Path
 import re
 import subprocess
@@ -11,8 +12,11 @@ from .support import mpp_device_open
 
 
 class HardwareDisplay:
-    def __init__(self, controller):
+    def __init__(self, controller, source_url=None, timestamped=False, fullscreen=False):
         self.controller = controller
+        self.source_url = source_url or URL
+        self.timestamped = timestamped
+        self.fullscreen = fullscreen
         self.process = self.player = None
         self.lock = threading.Lock()
         self.frame = 0
@@ -36,7 +40,8 @@ class HardwareDisplay:
                     'vpuDeviceOpen': mpp_device_open(self.process.pid if alive else None),
                     'intervalFps': self.rate,
                     'lastFrameAgeSeconds': time.monotonic() - self.last_frame if self.last_frame else 999,
-                    'error': self.error}
+                    'error': self.error, 'sourceUrl': self.source_url,
+                    'timestampedPipe': self.timestamped}
 
     def start(self):
         if self.snapshot()['running']:
@@ -80,16 +85,30 @@ class HardwareDisplay:
         args = [c.ffmpeg, '-hide_banner', '-nostdin', '-nostats', '-loglevel', 'info',
                 '-stats_period', '1', '-progress', 'pipe:2', '-rtsp_transport', 'tcp',
                 '-timeout', '5000000', '-hwaccel', 'rkmpp', '-hwaccel_output_format', 'drm_prime',
-                '-c:v', decoder, '-i', URL + '?role=hdmi', '-map', '0:v:0', '-an',
+                '-c:v', decoder, '-i', self.source_url + ('&' if '?' in self.source_url else '?') + 'role=hdmi', '-map', '0:v:0', '-an',
                 '-vf', 'scale_rkrga=w={}:h={}:format=nv12,hwdownload,format=nv12'.format(w, h),
-                '-fps_mode', 'passthrough', '-pix_fmt', 'nv12', '-f', 'rawvideo', 'pipe:1']
+                '-fps_mode', 'passthrough', '-pix_fmt', 'nv12']
+        if self.timestamped:
+            args += ['-c:v', 'rawvideo', '-flush_packets', '1', '-f', 'nut', 'pipe:1']
+            player_input = ['-f', 'nut', '-probesize', '32768', '-analyzeduration', '0']
+        else:
+            args += ['-f', 'rawvideo', 'pipe:1']
+            player_input = ['-f', 'rawvideo', '-pixel_format', 'nv12',
+                            '-video_size', '{}x{}'.format(w, h), '-framerate', str(c.config['fps'])]
+        player_args = ['/usr/bin/ffplay', '-hide_banner', '-loglevel', 'info', '-window_title',
+                       'IMX415 VPU decode / HDMI', '-noinfbuf', '-framedrop']
+        if self.fullscreen:
+            env['SDL_VIDEO_WINDOW_POS'] = '0,0'
+            env['SDL_VIDEO_FULLSCREEN_DISPLAY'] = '0'
+            player_args += ['-fs', '-left', '0', '-top', '0']
+        player_args += player_input + ['-i', 'pipe:0']
+        (c.root / 'logs/preview-commands.json').write_text(
+            json.dumps({'decoder': args, 'player': player_args}, indent=2))
         try:
             self.process = subprocess.Popen(args, env=c.environment, stdin=subprocess.DEVNULL,
                 stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True)
             with open(c.root / 'logs/preview.log', 'ab', buffering=0) as log:
-                self.player = subprocess.Popen(['/usr/bin/ffplay', '-hide_banner', '-loglevel', 'warning',
-                    '-f', 'rawvideo', '-pixel_format', 'nv12', '-video_size', '{}x{}'.format(w, h),
-                    '-framerate', str(c.config['fps']), '-framedrop', '-i', 'pipe:0'],
+                self.player = subprocess.Popen(player_args,
                     env=env, stdin=self.process.stdout, stdout=subprocess.DEVNULL,
                     stderr=log, start_new_session=True)
             self.process.stdout.close()

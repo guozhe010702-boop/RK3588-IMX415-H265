@@ -6,6 +6,8 @@
 
 8K **实拍**入口为 `tests/imx415_8k.py`，共用计数/进程管理在 `tests/codec_metrics.py`；电脑入口为 `tools/tests/run_imx415_8k.py`。独立 RTSP 配置 `profiles/8k/mediamtx.yml` 使用 8555 端口，实拍路径 `imx415-upscaled-8k30`。[8K 程序清单、实测与命令解释](../../docs/guides/8K_HEVC方案与实测.md) 说明 4K 实拍放大后的 8K30 硬编、实拍来源离线 8K60 文件的硬解，以及原生 8K 的限制。`tests/codec_8k.py` 是上一轮合成基准，本轮实拍不调用它。`check.videoCodecCapabilities` 只报告芯片规格，不等于相机验收。
 
+板端实拍 8K30 硬解/HDMI 支路为 `tests/hdmi_8k.py`，复用 `camera_control/decoder.py` 的 VPU/RGA 实现，使用带时间戳 NUT 管道显示 1080p。电脑通过 `tools/tests/hdmi_imx415_8k.py` 单独启停、查询和下载性能 CSV；该支路不重新打开摄像头、不重启编码器。操作与实际显示丢帧边界见 8K 指南第 9 节。
+
 | 文件 | 责任 | 不负责的内容 |
 | --- | --- | --- |
 | [avctl.py](avctl.py) | 启动命令行入口 | 不保存直播状态，不自行启动第二个采集器 |

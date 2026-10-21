@@ -39,6 +39,9 @@ A 是实时相机画面，但 **4K 放大不是原生 8K 拍摄**。B 的每帧�
 | `tools/tests/prepare_camera_8k60.py` | 电脑离线准备实拍来源的 8K60 文件；只接受真实 4K60 验证结果，校验原录像哈希、帧率和时间戳；转换后再次核对帧数及 PTS |
 | `board/ffmpeg_pipeline/profiles/8k/mediamtx.yml` | 独立 8555 端口配置；实拍路径为 `imx415-upscaled-8k30`，仅本机允许发布，局域网可读取；不占原 8554 端口 |
 | `board/ffmpeg_pipeline/tests/test_imx415_8k.py` | 新实拍路线的自动测试：采集源、真实选帧、禁止低帧率冒充 60 fps、转换参数及来源拒绝 |
+| `board/ffmpeg_pipeline/tests/hdmi_8k.py` | 给已运行的实拍 8K30 直播增加板端 VPU 硬解→RGA→HDMI 支路；不打开摄像头，保存每秒性能 CSV 和状态 |
+| `tools/tests/hdmi_imx415_8k.py` | 电脑通过 ADB 单独启动、查询、停止 HDMI 支路，下载其日志与 CSV；不重启编码器 |
+| `board/ffmpeg_pipeline/tests/test_hdmi_8k.py` | 验证完整 8K 硬解、先 RGA 缩放再下载、带时间戳管道、输入尺寸报告与原控制接口兼容 |
 | `board/ffmpeg_pipeline/tests/codec_8k.py` | **上一轮**合成素材的独立 VPU 基准入口；本轮实拍入口不调用它 |
 | `tools/tests/prepare_8k_fixtures.py` | **上一轮**生成带标识的合成测试素材；不是相机程序，本轮不运行 |
 | `tools/tests/run_8k_lab.py` | **上一轮**合成素材上传及测试编排；保留作历史诊断，不作为实拍验收 |
@@ -179,3 +182,57 @@ python .\tools\tests\run_imx415_8k.py --mode decode60 --input "$prepared8k\camer
 当前完成的是有界实验脚本和实拍短测，尚未完成原生 8K 传感器接入、外部实时 8K60 编码器、8K 屏幕显示、8K 桌面按钮及连续 30 分钟高复杂运动场景测试。电脑可见预览的长期帧率、网口实际带宽、温度和资源趋势也需要独立长测，不能由文件元数据或 SoC 规格推断。
 
 若需要原生 8K 实拍，应另选传感器/ISP/采集路径；若需要实时 8K60 网络输入，应另备支持该编码能力的外部设备。当前方案让现有 IMX415 提供真实画面，清楚保留空间放大和离线步骤的边界。
+
+## 9. 实拍 8K30 硬编＋板端硬解 HDMI
+
+这条支路已接到当前实拍直播，不再读取 `/dev/video44`。完整流程为：
+
+```text
+IMX415 4K60 实拍 → 选取 30 fps → RGA 放大 8K → VPU hevc_rkmpp 编码
+  → MediaMTX :8555/imx415-upscaled-8k30
+      ├→ 板端 hevc_rkmpp 完整硬解 7680×4320
+      │   → RGA 缩至 1920×1080 → NUT/NV12 时间戳管道 → 系统 ffplay → HDMI
+      └→ 电脑原有 Intel QSV 预览（可同时运行）
+```
+
+当前 HDMI-1 的实际模式为 **1920×1080、60 Hz**；视频编码与解码目标都是 **30 fps**。显示器刷新率、编码帧率、解码输出帧率与实际显示帧率分别统计，不把 1080p 屏幕描述成原生 8K 屏幕。屏幕全屏显示只改变窗口，不改 EDID 或系统显示模式。
+
+复用的 `camera_control/decoder.py` 新增可选源地址和带时间戳 NUT 管道；原控制器默认仍读取 8554 的 `imx415` 路径，原裸流调用保持兼容。实验读取 8555 的实拍 8K30，明确使用 `hevc_rkmpp`，硬解失败不改成软件解码。RGA 缩放发生在完整 8K 解码之后。
+
+以下命令均在 **Windows PowerShell、av_dev 根目录**执行；先保持现有实拍 8K30 源运行。
+
+```powershell
+python .\tools\tests\hdmi_imx415_8k.py start
+```
+
+解释：上传所需 HDMI 程序、备份原解码模块，附加板端硬解显示支路；已有该支路时直接报告现状，不重复启动。摄像头采集和编码器不重启。源未运行、尺寸不符、HDMI 未连接时明确报错。
+
+```powershell
+python .\tools\tests\hdmi_imx415_8k.py status
+```
+
+解释：查询支路是否存活及数据是否过期；`metrics.display.inputSize` 是完整硬解尺寸，`displaySize` 是缩放尺寸，`intervalFps` 是计数与单调时间差得到的解码输出速率；`encoderVpuOpen`、`display.vpuDeviceOpen` 分别观察两个进程是否打开 MPP 设备。`processes` 的 CPU 百分比按单个逻辑核为 100%，不能直接当作整板 CPU 百分比；RSS 是各进程驻留内存，`memory.percent` 是板端整体内存使用率。
+
+```powershell
+python .\tools\tests\hdmi_imx415_8k.py collect
+```
+
+解释：把本次状态、原始日志、命令和 `metrics.csv` 下载到电脑 `.cache/hdmi-8k/`，不停止直播。CSV 每秒一行，包括编码/解码计数与速率、三个进程的 CPU/RSS、整体内存占用和温度；文件保留本地，不上传 GitHub。`logs/preview.log` 的 `fd` 是播放器丢显示帧计数，不等于编码丢帧。
+
+```powershell
+python .\tools\tests\hdmi_imx415_8k.py stop
+```
+
+解释：仅停止 HDMI 读取和显示支路，保持采集、硬编码、RTSP 以及电脑预览运行。再次执行 `start` 可重新接入。直接在 HDMI 窗口按 Esc/Q，也会结束本次 HDMI 支路。
+
+当前实拍源由电脑的 `run_imx415_8k.py --live` 测试管理，关闭它的电脑预览窗口会结束该源，HDMI 会随源结束清理。若需要完全独立于电脑运行，先停止现有源，再按第 4 节在板端启动带 `--live` 的源；然后在另一个**板端 Linux 终端、`/userdata/av_dev/ffmpeg_pipeline` 目录**执行：
+
+```bash
+python3 tests/hdmi_8k.py --output "lab8k-camera/hdmi-$(date +%Y%m%d-%H%M%S)"
+```
+
+解释：只接入已有的实拍 8K30 源，持续硬解到 HDMI；`--output` 保存本次证据，时间后缀避免覆盖旧数据。Ctrl+C 只结束此 HDMI 支路。无需电脑解码才能在板端屏幕显示。
+
+2026-10-21 本轮首次并行观察超过 5 分钟：稳定统计区间约 318 秒，编码约 **29.91 fps**、板端解码输出约 **29.73 fps**；两进程全程观察到 MPP 设备访问，解码错误记录为空，最高温度约 **55.5°C**，板端整体内存约 **48.3%**。完整输入为 7680×4320，HDMI 输出为 1920×1080。电脑核显预览同时保留。
+
+这是功能导通与短测，**不是零丢帧或 30 分钟稳定性验收**。HDMI 播放器在约 381 秒时累计丢弃约 1739 个显示帧，输入视频队列约 3～9 MiB；解码输出接近 30 fps不代表屏幕逐帧显示了 30 fps。保留这些数据，后续可针对显示端优化。`M-V` 只是播放器时钟差，不是精确镜头到屏幕延迟；本次也没有消除已有相机源的全部序号缺口。
