@@ -17,9 +17,11 @@ import time
 from codec_metrics import ROOT, camera_owners, execute, frame_errors
 
 
-def capture_arguments(mode, source_fps, frames, movie, rtsp=False):
+def capture_arguments(mode, source_fps, frames, movie, rtsp=False, live=False):
     if mode not in ("encode30", "capture60"):
         raise ValueError("Not a real-camera capture mode")
+    if live and (mode != "encode30" or not rtsp):
+        raise ValueError("Live preview requires encode30 and RTSP")
     target = 30 if mode == "encode30" else 60
     ratio = source_fps / target
     if ratio < 1 or abs(ratio - round(ratio)) > 0.01:
@@ -59,8 +61,6 @@ def capture_arguments(mode, source_fps, frames, movie, rtsp=False):
         "-an",
         "-vf",
         ",".join(filters),
-        "-frames:v",
-        str(frames),
         "-c:v",
         "hevc_rkmpp",
         "-rc_mode",
@@ -76,6 +76,15 @@ def capture_arguments(mode, source_fps, frames, movie, rtsp=False):
         "-fps_mode",
         "passthrough",
     ]
+    if live:
+        return args + [
+            "-f",
+            "rtsp",
+            "-rtsp_transport",
+            "tcp",
+            "rtsp://127.0.0.1:8555/imx415-upscaled-8k30",
+        ]
+    args += ["-frames:v", str(frames)]
     if rtsp:
         return args + [
             "-flags",
@@ -118,6 +127,9 @@ def main():
     p.add_argument("--rtsp", action="store_true", help="owned port 8555 server, encode30 only")
     p.add_argument("--display-scale", action="store_true")
     p.add_argument("--handover", action="store_true")
+    p.add_argument(
+        "--live", action="store_true", help="continuous RTSP only; no MP4, no frame limit"
+    )
     a = p.parse_args()
     if not 120 <= a.frames <= 3600:
         p.error("frames must be 120..3600")
@@ -125,6 +137,8 @@ def main():
         p.error("RTSP applies to encode30 only")
     if a.display_scale and a.mode != "decode60":
         p.error("display-scale applies to decode60 only")
+    if a.live and (a.mode != "encode30" or not a.rtsp):
+        p.error("--live requires --mode encode30 --rtsp")
     import fcntl
 
     sys.path.insert(0, str(ROOT))
@@ -158,6 +172,8 @@ def main():
             "mode": a.mode,
             "sourceSize": [3840, 2160],
             "restored": False,
+            "livePreview": a.live,
+            "recording": a.mode != "decode60" and not a.live,
         }
         movie = a.output / (
             "camera-upscaled-8k30.mp4" if a.mode == "encode30" else "camera-4k60.mp4"
@@ -169,7 +185,7 @@ def main():
             fps = sensor_frame_rate("/dev/video44")
             if fps is None:
                 raise RuntimeError("Cannot verify sensor frame interval")
-            args = capture_arguments(a.mode, fps, a.frames, movie, a.rtsp)
+            args = capture_arguments(a.mode, fps, a.frames, movie, a.rtsp, a.live)
             result.update(
                 sensor=capability,
                 sensorReportedFps=fps,
@@ -254,7 +270,13 @@ def main():
                 if server.poll() is not None:
                     raise RuntimeError("Port 8555 server failed; see mediamtx.log")
             result["measurement"] = m = execute(
-                ffmpeg, env, ["-loglevel", "verbose"] + args, a.output, a.frames
+                ffmpeg,
+                env,
+                ["-loglevel", "verbose"] + args,
+                a.output,
+                0 if a.live else a.frames,
+                timeout_seconds=None if a.live else 180,
+                stop_file=a.output / "stop.request" if a.live else None,
             )
             log = (a.output / "ffmpeg.log").read_text(errors="replace")
             result["frameErrorLines"] = frame_errors(log)
@@ -277,7 +299,7 @@ def main():
                 )
                 result["captureIntervalGaps"] = stable[-1]["gaps"] - stable[0]["gaps"]
             valid = True
-            if a.mode != "decode60" and m["exitCode"] == 0:
+            if a.mode != "decode60" and not a.live and m["exitCode"] == 0:
                 result["encodedProbe"] = info = probe(ffprobe, env, movie)
                 stream = info["streams"][0]
                 valid = (
@@ -290,7 +312,8 @@ def main():
 
                 result["fileSha256"] = hashlib.sha256(movie.read_bytes()).hexdigest()
             result["shortTestPassed"] = bool(
-                valid
+                not a.live
+                and valid
                 and m["exitCode"] == 0
                 and m["frames"] == a.frames
                 and m["mppDeviceObserved"]
@@ -303,6 +326,14 @@ def main():
                     or result["sensorReportedFps"] == 30
                     or result["filterDuplicateFrames"] == 0
                 )
+                and not result["frameErrorLines"]
+            )
+            result["livePreviewEnded"] = bool(
+                a.live
+                and m["stopRequested"]
+                and m["exitCode"] in (0, 255)
+                and m["frames"] > 0
+                and m["mppDeviceObserved"]
                 and not result["frameErrorLines"]
             )
         finally:
@@ -337,7 +368,12 @@ def main():
             temporary.write_text(json.dumps(result, indent=2))
             temporary.replace(a.output / "result.json")
         print(json.dumps(result, indent=2), flush=True)
-        return 0 if result.get("shortTestPassed") and result.get("restored") else 1
+        return (
+            0
+            if (result.get("shortTestPassed") or result.get("livePreviewEnded"))
+            and result.get("restored")
+            else 1
+        )
 
 
 if __name__ == "__main__":

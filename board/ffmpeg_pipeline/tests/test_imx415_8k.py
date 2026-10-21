@@ -53,3 +53,57 @@ def test_unverified_camera_source_rejected(tmp_path):
     source.write_bytes(b"not camera")
     with pytest.raises(ValueError, match="verified real"):
         fixture.validate_camera(source, {"scope": "SYNTHETIC_CODEC_ONLY"}, {})
+
+
+def test_continuous_preview_never_records_or_stops_at_frame_limit():
+    args = capture_arguments("encode30", 60, 600, Path("unused.mp4"), rtsp=True, live=True)
+    assert "-frames:v" not in args
+    assert args[-1] == "rtsp://127.0.0.1:8555/imx415-upscaled-8k30"
+    assert not any("mp4" in x for x in args)
+    with pytest.raises(ValueError):
+        capture_arguments("capture60", 60, 600, Path("unused.mp4"), live=True)
+
+
+sys.path.insert(0, str(HERE.parents[2] / "tools/tests"))
+import run_imx415_8k as preview
+
+
+def test_preview_waits_for_a_readable_real_camera_stream(tmp_path, monkeypatch):
+    import json
+    from types import SimpleNamespace
+
+    stream = {"codec_name": "hevc", "width": 7680, "height": 4320, "r_frame_rate": "30/1"}
+    monkeypatch.setattr(
+        preview.subprocess,
+        "run",
+        lambda *a, **k: SimpleNamespace(
+            returncode=0, stdout=json.dumps({"streams": [stream]}), stderr=""
+        ),
+    )
+    assert preview.wait_preview_stream("ffprobe", "rtsp://board/path", tmp_path) == stream
+    assert json.loads((tmp_path / "preview-stream.json").read_text()) == stream
+
+
+def test_preview_connection_failure_keeps_diagnostics(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+
+    monkeypatch.setattr(
+        preview.subprocess,
+        "run",
+        lambda *a, **k: SimpleNamespace(returncode=1, stdout="", stderr="Connection refused"),
+    )
+    monkeypatch.setattr(preview.time, "sleep", lambda _: None)
+    with pytest.raises(RuntimeError, match="preview-probe.log"):
+        preview.wait_preview_stream("ffprobe", "rtsp://board/path", tmp_path)
+    assert "Connection refused" in (tmp_path / "preview-probe.log").read_text()
+
+
+def test_qsv_preview_keeps_full_decode_on_gpu_until_after_scaling():
+    args = preview.qsv_decode_command("ffmpeg", "rtsp://board/path", Path("progress.txt"))
+    assert args[args.index("-c:v") + 1] == "hevc_qsv"
+    filters = args[args.index("-vf") + 1]
+    assert filters.index("vpp_qsv=w=1280:h=720") < filters.index("hwdownload")
+    player = preview.preview_command("ffplay", "rtsp://board/path", "intel-qsv")
+    assert "-rtsp_transport" not in player
+    assert player[-1] == "pipe:0" and "-noinfbuf" in player
+    assert "-vf" not in player

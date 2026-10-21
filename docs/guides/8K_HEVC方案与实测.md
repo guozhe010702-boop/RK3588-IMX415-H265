@@ -54,6 +54,20 @@ A 是实时相机画面，但 **4K 放大不是原生 8K 拍摄**。B 的每帧�
 
 **执行位置：Windows PowerShell，`C:\Users\dvsense_docker\Desktop\work\RK3588\av_dev`。**
 
+当前电脑已验证 Intel UHD Graphics 770。日常看实时画面，使用下面的持续预览：
+
+```powershell
+python .\tools\tests\run_imx415_8k.py --mode encode30 --rtsp --preview --live --handover --preview-backend intel-qsv
+```
+
+解释：`--live` 保持窗口和 RTSP 运行，直到关闭窗口或按 Esc/Q，不再按 30 秒或帧数自动退出，**此模式不写 MP4**；`--preview-backend intel-qsv` 使用电脑 FFmpeg 的 `hevc_qsv` 完整解码 8K，通过 `vpp_qsv` 在 GPU 上缩到 1280×720，下载缩小后的 NV12，经带时间戳 NUT 管道交给 ffplay。局域网中仍传 8K30 H.265，板端仍执行 VPU 8K30 硬编。硬件初始化失败会明确报错，不静默改用软件解码。该选项要求兼容 Intel 核显、驱动，以及含 `hevc_qsv`/`vpp_qsv` 的电脑 FFmpeg。
+
+窗口关闭后，仅结束本次实验，再恢复实验前的已知直播/HDMI 状态；实验前服务停着则保持停止。不要同时启动第二条相机测试。日志在本次 `.cache/imx415-8k/<时间>-encode30/`：`preview-probe.log`、`preview-stream.json` 检查可读性和尺寸；`preview-decoder.log`、`preview-progress.txt` 记录核显解码；`ffplay.log` 记录播放器错误与丢帧；`player.json` 保存本次进程标识。日志和实拍图像不上传 GitHub。
+
+原来 `--frames 900` 的窗口约 30 秒后关闭是限时测试行为，不能把它当成持续预览。原软件解码路径在这台电脑上曾出现大量显示丢帧、缓存持续增长；现在播放器使用 `-noinfbuf` 限制缓存，Intel QSV 路径先在 GPU 缩小再下载，避免持续拷贝完整 8K 帧。另一台电脑没有兼容 Intel GPU 时可使用默认 `software` 路径，但必须实测能否跟上 30 fps，不能承诺同等性能。[FFplay 缓冲及播放选项](https://ffmpeg.org/ffplay.html)
+
+需要**有界编码测试并保存 MP4**时，仍使用：
+
 ```powershell
 python .\tools\tests\run_imx415_8k.py --mode encode30 --frames 3600 --rtsp --preview --handover
 ```
@@ -86,7 +100,7 @@ python3 tests/imx415_8k.py --mode encode30 --frames 3600 --rtsp --handover --out
 
 解释：运行实拍 8K30、约 120 秒、MP4＋RTSP 的同一流程。`--output` 指定证据目录；`date` 加入当前时间防止覆盖旧记录；`--handover` 的保护与恢复行为同前。私有库搜索路径由脚本仅对子进程设置，不需要改系统 `LD_LIBRARY_PATH`。
 
-结束后 `result.json` 包括实际尺寸、传感器报告帧率、采集/输出速率、采集缺口、VPU 设备访问、补帧计数及封装校验；`command.json` 为实际 FFmpeg 命令，`ffmpeg.log` 和 `progress.jsonl` 保留原始证据。Ctrl+C 会清理本次子进程并尝试恢复原直播；强制断电不保证 MP4 封口。
+结束后 `result.json` 包括实际尺寸、传感器报告帧率、采集/输出速率、采集缺口、VPU 设备访问、补帧计数及封装校验；`command.json` 为实际 FFmpeg 命令，`ffmpeg.log` 和 `progress.jsonl` 保留原始证据。Ctrl+C 会清理本次子进程并尝试恢复原直播；强制断电不保证 MP4 封口。板端也支持在上述命令中增加 `--live` 持续推流，不录像，此时通过 Ctrl+C 停止。
 
 ## 5. 准备和验证实拍来源 8K60 硬解
 
@@ -148,6 +162,11 @@ python .\tools\tests\run_imx415_8k.py --mode decode60 --input "$prepared8k\camer
 | VPU 硬解实拍来源 8K60 | 1200 帧，稳定吞吐 109.05 fps | 不限速循环文件，约 10 秒统计窗；全程含初始化 108.75 fps |
 | VPU 硬解＋RGA 1080p＋下载 | 1200 帧，稳定吞吐 76.88 fps | 约 14.7 秒统计窗；全程含初始化 76.47 fps；未测物理屏幕帧率 |
 | 共用测量模块整理后回归 | 8K30 600 帧约 29.92 fps；8K60 硬解＋RGA 1200 帧约 75.62 fps | 无编码补帧、无滤镜重复帧、无帧错误；稳定采集约 59.98 fps，区间新增缺口 0 |
+| 持续预览停止/恢复检查 | 约 10 秒、298 帧；停止请求后编码器和服务退出，原停止状态保持 | 未创建 MP4；正常停止由 `livePreviewEnded` 单独标记，不冒充有界验收通过 |
+| 软件预览故障复现 | 板端约 350 秒保持 30.00 fps、采集约 59.99 fps、稳定段缺口 0；电脑软件播放掉帧并积压缓存 | 不是相机降帧；修复为有界缓冲和显式 Intel QSV 预览后重新验证 |
+| Intel QSV 初步验证 | 本机 8K 文件硬解＋GPU 缩放 120 帧约 1.12 秒；实时输出约 30 fps | 播放器短测丢帧 0、队列接近 0；只作当前电脑短测，待现场确认与长测 |
+
+持续预览约 140 秒时，QSV 进度为 4199 帧、全程平均 29.96 fps，编码补帧/丢帧均为 0；播放器累计丢弃 16 个显示帧，视频队列仍接近 0，没有此前持续积压的现象。初期显示丢帧为 0 不代表永远零丢帧。FFplay 的 `M-V` 是播放时钟差，不能当作镜头到屏幕的精确延迟。本机直接 Vulkan 播放曾异常退出，故当前使用显式 QSV 硬解/GPU 缩放＋SDL 显示小帧的路径，没有升级驱动或替换原桌面播放器。
 
 上述编解码均观察到 MPP 设备访问，帧错误扫描为空；结束后无本次 FFmpeg/MediaMTX 残留。开始时原控制服务未运行，结束仍保持停止。已抽取录像帧确认是摄像头实拍室内画面；电脑实时窗口的可见流畅程度仍以现场观察为准。本次场景主要静止，尚未做高复杂运动验收。启动缺口不能因此宣称已根治；相机源放大也不增加原生细节。
 

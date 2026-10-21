@@ -6,6 +6,8 @@
 
 本轮直接运行的新增入口是 `tools/tests/run_imx415_8k.py`（电脑）与 `board/ffmpeg_pipeline/tests/imx415_8k.py`（板端）；8K60 素材准备在 `tools/tests/prepare_camera_8k60.py`。上一轮合成基准保留历史标识，不作为实拍验收。
 
+持续预览已增加 `--live`，关闭窗口后才退出，不写 MP4；当前 Intel UHD 770 电脑推荐显式选择 `--preview-backend intel-qsv`，由核显完整解码 8K、GPU 缩放后交给 ffplay，避免软件解码积压。连接、解码、播放分别保留日志；命令和适用条件见上述指南。
+
 当前开发版本 **1.2.2**：实时带宽/CPU/内存卡片、自适应分栏、60 fps 预览、十分钟趋势、CSV 和板端硬解显示。真实 4K60 的能力、采集缺口和电脑长测分别记录，不以配置值冒充实际帧率。详细范围见 [验收记录](docs/history/4K60与性能监测验收.md)，使用与指标口径见 [性能指南](docs/guides/4K60与性能监测.md)。普通默认仍为 1080p30。
 
 ## 目录与入口

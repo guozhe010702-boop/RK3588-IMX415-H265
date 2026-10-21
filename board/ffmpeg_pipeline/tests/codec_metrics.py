@@ -46,12 +46,13 @@ def frame_errors(log):
     ]
 
 
-def execute(ffmpeg, env, args, output, frames):
+def execute(ffmpeg, env, args, output, frames, timeout_seconds=180, stop_file=None):
     started = time.monotonic()
     mpp = False
     samples = []
     buffer = ""
     record = {}
+    stop_requested = None
     logpath = output / "ffmpeg.log"
     progresspath = output / "progress.jsonl"
     command = [
@@ -100,6 +101,8 @@ def execute(ffmpeg, env, args, output, frames):
                                 "out_time_us": record.get("out_time_us"),
                             }
                             samples.append(sample)
+                            if stop_file is not None and len(samples) > 600:
+                                del samples[:-600]
                             progress.write(json.dumps(sample) + "\n")
                             progress.flush()
                             record = {}
@@ -113,8 +116,14 @@ def execute(ffmpeg, env, args, output, frames):
                         )
                     except OSError:
                         pass
-                if time.monotonic() - started > 180:
-                    raise TimeoutError("codec lab exceeded 180 seconds")
+                if stop_file is not None and stop_file.exists() and stop_requested is None:
+                    stop_requested = time.monotonic()
+                    if child.poll() is None:
+                        child.send_signal(signal.SIGINT)
+                if stop_requested is not None and time.monotonic() - stop_requested > 12:
+                    raise TimeoutError("Preview encoder did not exit after a stop request")
+                if timeout_seconds is not None and time.monotonic() - started > timeout_seconds:
+                    raise TimeoutError("codec lab exceeded {} seconds".format(timeout_seconds))
                 if child.poll() is not None and not readable:
                     break
             child.wait(timeout=5)
@@ -142,6 +151,7 @@ def execute(ffmpeg, env, args, output, frames):
         ),
         "mppDeviceObserved": mpp,
         "expectedFrames": frames,
+        "stopRequested": stop_requested is not None,
         "duplicateFrames": samples[-1]["duplicate_frames"] if samples else None,
         "droppedFrames": samples[-1]["dropped_frames"] if samples else None,
     }
